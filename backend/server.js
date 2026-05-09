@@ -13,7 +13,7 @@ app.use(cors());
 app.use(express.json());
 
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
-app.use("/photos",  express.static(path.join(__dirname, "..", "Photos")));  // Faculty passport photos at GSP/Photos/
+app.use("/photos",  express.static(path.join(__dirname, "Photos")));  // Faculty passport photos in backend/Photos/
 
 const uploadDir = path.join(__dirname, "uploads");
 if (!fs.existsSync(uploadDir)) {
