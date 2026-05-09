@@ -92,7 +92,7 @@ export default function Landing() {
         {/* Background image — Background.jpg from Photos folder */}
         <div className="absolute inset-0 z-0">
           <img
-            src="http://localhost:5000/photos/Background.jpg"
+            src={`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/photos/Background.jpg`}
             alt="Sathyabama Campus"
             className="w-full h-full object-cover object-center"
           />

@@ -228,6 +228,11 @@ export default function StudentDashboard({ user }) {
   const submitReview = async (e) => {
     e.preventDefault();
     setReviewMsg({ type: '', text: '' });
+    
+    if (!reviewFile) {
+      return setReviewMsg({ type: 'error', text: 'Please upload the required document before submitting.' });
+    }
+
     try {
       const formData = new FormData();
       // No need to send reviewStage, backend reads team.currentReview
