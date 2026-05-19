@@ -1,25 +1,25 @@
 require('dotenv').config();
 const mongoose = require('mongoose');
-const bcrypt   = require('bcryptjs');
+const bcrypt = require('bcryptjs');
 
 mongoose.connect(process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/guide_portal_demo')
   .then(() => console.log('✅ DB Connected for Seeding'))
   .catch(err => { console.error('❌ DB Error:', err.message); process.exit(1); });
 
 const UserSchema = new mongoose.Schema({
-  name:           { type: String, required: true, trim: true },
-  email:          { type: String, required: true, unique: true, lowercase: true, trim: true },
-  password:       { type: String, required: true },
-  role:           { type: String, enum: ['student','faculty','admin'], default: 'student' },
+  name: { type: String, required: true, trim: true },
+  email: { type: String, required: true, unique: true, lowercase: true, trim: true },
+  password: { type: String, required: true },
+  role: { type: String, enum: ['student', 'faculty', 'admin'], default: 'student' },
   registerNumber: { type: String, default: '' },
-  staffId:        { type: String, default: '' },
-  phone:          { type: String, default: '' },
+  staffId: { type: String, default: '' },
+  phone: { type: String, default: '' },
   specialization: { type: String, default: '' },
-  photoFile:      { type: String, default: '' },  // filename in /Photos folder e.g. "Dr.Kamatchi K.S.jpg"
-  maxTeams:       { type: Number, default: 10 },
+  photoFile: { type: String, default: '' },  // filename in /Photos folder e.g. "Dr.Kamatchi K.S.jpg"
+  maxTeams: { type: Number, default: 10 },
 }, { timestamps: true });
 
-UserSchema.pre('save', async function() {
+UserSchema.pre('save', async function () {
   if (!this.isModified('password')) return;
   this.password = await bcrypt.hash(this.password, 10);
 });
@@ -141,10 +141,16 @@ const facultyList = [
 
 // ── DEMO STUDENTS ─────────────────────────────────────────────────────────────
 const studentList = [
-  { name: 'Vivek S',  email: 'vivek@student.com',  phone: '9999000001', registerNumber: '43120237' },
-  { name: 'Vikram A', email: 'vikram@student.com', phone: '9999000002', registerNumber: '43120235' },
-  { name: 'Priya M',  email: 'priya@student.com',  phone: '9999000003', registerNumber: '43120240' },
-  { name: 'Arjun K',  email: 'arjun@student.com',  phone: '9999000004', registerNumber: '43120241' },
+  { name: 'Vivek S', email: 'vivek@student.com', phone: '9999999999', registerNumber: '43120237' },
+  { name: 'Vikram A', email: 'vikram@student.com', phone: '9999999999', registerNumber: '43120235' },
+  { name: 'Priya M', email: 'sk@student.com', phone: '9999999999', registerNumber: '43120196' },
+  { name: 'Arjun K', email: 'udaya@student.com', phone: '9999999999', registerNumber: '43120227' },
+  { name: 'Vikram A', email: 'tamil@student.com', phone: '9999999999', registerNumber: '43120224' },
+  { name: 'Priya M', email: 'harshini@student.com', phone: '9999999999', registerNumber: '43120209' },
+  { name: 'Arjun K', email: 'suria@student.com', phone: '9999999999', registerNumber: '43120219' },
+  { name: 'Vikram A', email: 'shrinivas@student.com', phone: '9999999999', registerNumber: '43120204' },
+  { name: 'Priya M', email: 'harsha@student.com', phone: '9999999999', registerNumber: '43120211' },
+
 ];
 
 const seedData = async () => {

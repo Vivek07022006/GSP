@@ -13,7 +13,7 @@ app.use(cors());
 app.use(express.json());
 
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
-app.use("/photos",  express.static(path.join(__dirname, "Photos")));  // Faculty passport photos in backend/Photos/
+app.use("/photos",  express.static(path.join(__dirname, "Photos")));
 
 const uploadDir = path.join(__dirname, "uploads");
 if (!fs.existsSync(uploadDir)) {
@@ -32,7 +32,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage: storage,
-  limits: { fileSize: 15 * 1024 * 1024 }, // 15 MB
+  limits: { fileSize: 15 * 1024 * 1024 },
 });
 
 // ─────────────────────────────────────────────
@@ -82,7 +82,7 @@ const TeamSchema = new mongoose.Schema({
   projectTitle:  { type: String, default: "" },
   members:       [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
   guideId:       { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
-  status:        { type: String, enum: ["pending", "guide_approved", "guide_rejected"], default: "pending" },
+  status:        { type: String, enum: ["pending", "guide_approved"], default: "pending" },
   currentReview: { type: Number, default: 0 },   // 0=Zeroth … 4=Final
 }, { timestamps: true });
 
@@ -94,7 +94,7 @@ const ReviewSchema = new mongoose.Schema({
   reviewStage:   { type: Number, required: true, min: 1, max: 4 },  // Stage 0 = guide selection (not submittable)
   submissionFile:{ type: String, default: "" },   // general doc (stage 3 & 4)
   pptFileName:   { type: String, default: "" },   // stage 1 & 2
-  patentStatus:  { type: String, enum: ["", "Acceptance", "In-Progress", "Applied"], default: "" },
+  patentStatus:  { type: String, enum: ["", "Patent", "Publication"], default: "" },
   patentFileName:{ type: String, default: "" },   // acceptance letter or applied mail screenshot
   comments:      [CommentSchema],
   status:        { type: String, enum: ["pending", "approved", "changes"], default: "pending" },
@@ -272,12 +272,14 @@ app.post("/api/teams/:id/select-guide", protect, async (req, res) => {
     if (!guide || guide.role !== "faculty") return res.status(404).json({ message: "Guide not found" });
 
     // Count how many teams already assigned to this guide
-    const assignedCount = await Team.countDocuments({ guideId: guide._id, status: { $ne: "guide_rejected" } });
+    const assignedCount = await Team.countDocuments({ guideId: guide._id });
     if (assignedCount >= guide.maxTeams)
       return res.status(400).json({ message: `Guide has reached the maximum of ${guide.maxTeams} teams.` });
 
-    team.guideId = guideId;
-    team.status  = "pending";
+    // Auto-approve: directly assign guide and unlock First Review
+    team.guideId       = guideId;
+    team.status        = "guide_approved";
+    team.currentReview = 1;  // unlock First Review immediately
     await team.save();
 
     const populated = await Team.findById(team._id).populate("members", "-password").populate("guideId", "-password");
@@ -292,10 +294,7 @@ app.get("/api/guides", protect, async (req, res) => {
   try {
     const faculty = await User.find({ role: "faculty" }).select("-password");
     const withCapacity = await Promise.all(faculty.map(async (f) => {
-      const assigned = await Team.countDocuments({
-        guideId: f._id,
-        status: { $ne: "guide_rejected" }
-      });
+      const assigned = await Team.countDocuments({ guideId: f._id });
       return {
         _id:            f._id,
         name:           f.name,

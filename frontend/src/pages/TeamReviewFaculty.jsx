@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../utils/api';
-import { CheckCircle, XCircle, ChevronLeft, MessageSquare, Download } from 'lucide-react';
+import { CheckCircle, ChevronLeft, MessageSquare, Download } from 'lucide-react';
 
 const REVIEW_STAGES = ['Zeroth', 'First', 'Second', 'Model', 'Final'];
 
@@ -15,11 +15,11 @@ const StatusBadge = ({ status }) => {
     approved:       'bg-green-100 text-green-800 border border-green-200',
     changes:        'bg-orange-100 text-orange-800 border border-orange-200',
     guide_approved: 'bg-green-100 text-green-800 border border-green-200',
-    guide_rejected: 'bg-red-100 text-red-800 border border-red-200',
+    completed:      'bg-indigo-100 text-indigo-800 border border-indigo-200',
   };
   const labels = {
     pending: 'Pending', approved: 'Approved', changes: 'Changes Required',
-    guide_approved: 'Approved', guide_rejected: 'Rejected',
+    guide_approved: 'Assigned', completed: 'Completed',
   };
   return <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${map[status] || 'bg-gray-100 text-gray-600'}`}>{labels[status] || status}</span>;
 };
@@ -56,16 +56,6 @@ export default function TeamReviewFaculty({ user }) {
     fetchTeamData();
   }, [teamId]);
 
-  const approveTeam = async (status) => {
-    setMsg({ type: '', text: '' });
-    try {
-      await api.post(`/api/guides/team/${team._id}/status`, { status });
-      setMsg({ type: 'success', text: status === 'guide_approved' ? '✅ Team approved!' : '❌ Team rejected.' });
-      fetchTeamData();
-    } catch (err) {
-      setMsg({ type: 'error', text: err.response?.data?.message || 'Action failed.' });
-    }
-  };
 
   const submitFeedback = async () => {
     setMsg({ type: '', text: '' });
@@ -147,24 +137,7 @@ export default function TeamReviewFaculty({ user }) {
               ))}
             </div>
           </GlassCard>
-
-          <div className="space-y-6">
-            {team.status === 'pending' && (
-              <GlassCard className="p-6 bg-blue-50 border-blue-200 overflow-hidden relative">
-                <p className="text-blue-800 text-base font-bold mb-1">Guide Approval Request</p>
-                <p className="text-blue-700 text-sm mb-4">This team has requested you to be their guide.</p>
-                <div className="flex gap-3">
-                  <button onClick={() => approveTeam('guide_approved')}
-                    className="flex-1 flex justify-center items-center gap-1.5 bg-green-600 hover:bg-green-700 text-white px-4 py-2.5 rounded-lg transition-colors font-bold shadow-sm">
-                    <CheckCircle size={16} /> Approve
-                  </button>
-                  <button onClick={() => approveTeam('guide_rejected')}
-                    className="flex-1 flex justify-center items-center gap-1.5 bg-red-600 hover:bg-red-700 text-white px-4 py-2.5 rounded-lg transition-colors font-bold shadow-sm">
-                    <XCircle size={16} /> Reject
-                  </button>
-                </div>
-              </GlassCard>
-            )}
+          <div className="space-y-4">
 
             {team.status === 'guide_approved' && team.currentReview >= 1 && team.currentReview <= 4 && (() => {
               // Find if student has submitted for the current stage
@@ -285,7 +258,7 @@ export default function TeamReviewFaculty({ user }) {
                     )}
                     {r.patentStatus && (
                       <div className="text-sm text-gray-700">
-                        <p>Patent Status: <span className="bg-gray-100 border border-gray-200 px-2 py-0.5 rounded font-medium text-xs">{r.patentStatus}</span></p>
+                        <p>Type: <span className="bg-gray-100 border border-gray-200 px-2 py-0.5 rounded font-medium text-xs">{r.patentStatus}</span></p>
                         {r.patentFileName && (
                           <p className="mt-1 flex items-center gap-2">Proof: <a href="#" onClick={(e) => handleDownload(e, r.patentFileName)} className="text-purple-600 hover:text-purple-800 font-bold underline underline-offset-2 flex items-center gap-1">{r.patentFileName} <Download size={14}/></a></p>
                         )}

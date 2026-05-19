@@ -534,19 +534,8 @@ export default function StudentDashboard({ user }) {
               </GlassCard>
             )}
 
-            {/* Guide REJECTED — show banner + full list for re-selection */}
-            {team && team.status === 'guide_rejected' && (
-              <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-red-700 text-sm flex items-start gap-2">
-                <span className="text-lg">❌</span>
-                <div>
-                  <p className="font-bold">Your guide selection was rejected.</p>
-                  <p className="text-xs text-red-500 mt-1">Please select a different guide from the list below.</p>
-                </div>
-              </div>
-            )}
-
-            {/* Guide already selected AND approved → show ONLY that guide */}
-            {team && guideSelected && team.status !== 'guide_rejected' && (() => {
+            {/* Guide already selected → show guide info */}
+            {team && guideSelected && (() => {
               const myGuide = guides.find(g =>
                 g._id?.toString() === (team.guideId?._id || team.guideId)?.toString()
               );
@@ -554,7 +543,7 @@ export default function StudentDashboard({ user }) {
                 <div className="space-y-3">
                   <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-green-700 text-sm flex items-center gap-2">
                     <CheckCircle size={15} className="flex-shrink-0" />
-                    Guide selected! Awaiting approval from your guide.
+                    Guide assigned! Your guide is <strong className="ml-1">{team.guideId?.name || 'your guide'}</strong>.
                   </div>
                   {myGuide && (
                     <GuideCard guide={myGuide} onSelect={() => {}} myTeam={team} />
@@ -563,8 +552,8 @@ export default function StudentDashboard({ user }) {
               );
             })()}
 
-            {/* Guide not yet selected OR was rejected → list all faculty */}
-            {team && (!guideSelected || team.status === 'guide_rejected') && (
+            {/* Guide not yet selected → list all faculty */}
+            {team && !guideSelected && (
               guides.length === 0 ? (
                 <GlassCard className="p-10 text-center">
                   <UserCircle size={36} className="mx-auto text-gray-300 mb-3" />
@@ -656,31 +645,30 @@ export default function StudentDashboard({ user }) {
                         </div>
                       </div>
 
-                      {/* If stage 1 or 2, show patent dropdown */}
+                      {/* Stage 1 & 2: Patent / Publication type dropdown */}
                       {(currentStage === 1 || currentStage === 2) && (
                         <div>
-                          <label className={labelCls}>Paper Publication / Patent Status</label>
+                          <label className={labelCls}>Type</label>
                           <div className="relative mb-3">
                             <select value={patentStatus} onChange={e => setPatentStatus(e.target.value)}
                               className={`${inputCls}`}>
-                              <option value="">Select status...</option>
-                              <option value="Acceptance">Acceptance</option>
-                              <option value="In-Progress">In-Progress</option>
-                              <option value="Applied">Applied</option>
+                              <option value="">Select type...</option>
+                              <option value="Patent">Patent</option>
+                              <option value="Publication">Publication</option>
                             </select>
                             <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                           </div>
 
-                          {(patentStatus === 'Acceptance' || patentStatus === 'Applied') && (
+                          {patentStatus && (
                             <div className="mt-3">
                               <label className={labelCls}>
-                                Upload {patentStatus === 'Acceptance' ? 'Acceptance Letter' : 'Applied Mail Screenshot'}
+                                Upload {patentStatus} Proof Document
                               </label>
                               <div className="border-2 border-dashed border-gray-200 bg-gray-50 rounded-xl py-4 text-center hover:border-[#7B1535]/40 transition-colors">
                                 <input type="file" onChange={e => setPatentFile(e.target.files[0])}
                                   accept=".pdf,image/*" className="hidden" id="patent-file" />
                                 <label htmlFor="patent-file" className="cursor-pointer text-xs text-[#7B1535] hover:text-gray-900 transition-colors">
-                                  {patentFile ? patentFile.name : `Click to attach ${patentStatus.toLowerCase()} proof`}
+                                  {patentFile ? patentFile.name : `Click to attach ${patentStatus.toLowerCase()} document`}
                                 </label>
                               </div>
                             </div>
