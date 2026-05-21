@@ -55,10 +55,27 @@ export default function AdminDashboard({ user }) {
   const exportCSV = async () => {
     try {
       const res = await api.get('/api/admin/export');
-      const rows = [['Team ID','Project','Members','Guide','Status','Current Review']];
-      res.data.forEach(t => {
+      const rows = [['Team ID', 'Project Title', 'Member Name', 'Register Number', 'Guide', 'Current Review']];
+      res.data.forEach((t, idx) => {
+        const teamCode = `BTECH-IT-${String(idx + 1).padStart(3, '0')}`;
         const reviewLabel = (t.currentReview || 0) >= 5 ? 'Completed all review' : `${REVIEW_STAGES[t.currentReview || 0]} Review`;
-        rows.push([t._id, t.projectTitle, t.members?.map(m => m.name||m).join('; '), t.guideId?.name||'', t.status, reviewLabel]);
+        const guide = t.guideId?.name || '';
+        // One row per member
+        const members = t.members || [];
+        if (members.length === 0) {
+          rows.push([teamCode, t.projectTitle || '', '', '', guide, reviewLabel]);
+        } else {
+          members.forEach((m, mi) => {
+            rows.push([
+              mi === 0 ? teamCode : '',              // Team ID only on first member row
+              mi === 0 ? (t.projectTitle || '') : '', // Project only on first row
+              m.name || '',
+              m.registerNumber || '',
+              mi === 0 ? guide : '',                 // Guide only on first row
+              mi === 0 ? reviewLabel : '',
+            ]);
+          });
+        }
       });
       const csv = rows.map(r => r.map(c => `"${(c||'').toString().replace(/"/g,'""')}"`).join(',')).join('\n');
       const a = document.createElement('a');

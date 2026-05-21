@@ -169,10 +169,11 @@ export default function StudentDashboard({ user }) {
   const [guideLoad, setGuideLoad] = useState(false);
 
   // Reviews
-  const [reviewFile,   setReviewFile]   = useState(null);
-  const [patentStatus, setPatentStatus] = useState('');
-  const [patentFile,   setPatentFile]   = useState(null);
-  const [reviewMsg,    setReviewMsg]    = useState({ type: '', text: '' });
+  const [reviewFile,      setReviewFile]      = useState(null);
+  const [patentStatus,    setPatentStatus]    = useState('');       // Patent | Publication
+  const [patentSubStatus, setPatentSubStatus] = useState('');       // Pending | Doing | Applied | Confirmed
+  const [patentFile,      setPatentFile]      = useState(null);
+  const [reviewMsg,       setReviewMsg]       = useState({ type: '', text: '' });
 
   useEffect(() => { fetchData(); }, []);
 
@@ -235,10 +236,11 @@ export default function StudentDashboard({ user }) {
 
     try {
       const formData = new FormData();
-      // No need to send reviewStage, backend reads team.currentReview
-      if (reviewFile) formData.append('document', reviewFile);
-      if (patentStatus) formData.append('patentStatus', patentStatus);
-      if (patentFile && ['Acceptance', 'Applied'].includes(patentStatus)) {
+      if (reviewFile)      formData.append('document', reviewFile);
+      if (patentStatus)    formData.append('patentStatus', patentStatus);
+      if (patentSubStatus) formData.append('patentSubStatus', patentSubStatus);
+      // Only attach proof file when status is Applied or Confirmed
+      if (patentFile && ['Applied', 'Confirmed'].includes(patentSubStatus)) {
         formData.append('patentFile', patentFile);
       }
 
@@ -246,9 +248,9 @@ export default function StudentDashboard({ user }) {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
       setReviewMsg({ type: 'success', text: `${REVIEW_STAGES[currentStage]} Review submitted! Awaiting guide feedback.` });
-      // Reset form variables
       setReviewFile(null);
       setPatentStatus('');
+      setPatentSubStatus('');
       setPatentFile(null);
       fetchData();
     } catch (err) {
@@ -645,30 +647,61 @@ export default function StudentDashboard({ user }) {
                         </div>
                       </div>
 
-                      {/* Stage 1 & 2: Patent / Publication type dropdown */}
+                      {/* Stage 1 & 2: Patent / Publication section */}
                       {(currentStage === 1 || currentStage === 2) && (
-                        <div>
-                          <label className={labelCls}>Type</label>
-                          <div className="relative mb-3">
-                            <select value={patentStatus} onChange={e => setPatentStatus(e.target.value)}
-                              className={`${inputCls}`}>
-                              <option value="">Select type...</option>
-                              <option value="Patent">Patent</option>
-                              <option value="Publication">Publication</option>
-                            </select>
-                            <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                        <div className="space-y-4 border-t border-gray-100 pt-4 mt-2">
+                          {/* Step 2: Type */}
+                          <div>
+                            <label className={labelCls}>Project Type <span className="text-red-500">*</span></label>
+                            <div className="relative">
+                              <select
+                                value={patentStatus}
+                                onChange={e => { setPatentStatus(e.target.value); setPatentSubStatus(''); setPatentFile(null); }}
+                                className={inputCls}
+                              >
+                                <option value="">-- Select type --</option>
+                                <option value="Patent">Patent</option>
+                                <option value="Publication">Publication (Journal)</option>
+                              </select>
+                              <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                            </div>
                           </div>
 
+                          {/* Step 3: Status — only shown after type is chosen */}
                           {patentStatus && (
-                            <div className="mt-3">
+                            <div>
+                              <label className={labelCls}>{patentStatus} Status <span className="text-red-500">*</span></label>
+                              <div className="relative">
+                                <select
+                                  value={patentSubStatus}
+                                  onChange={e => { setPatentSubStatus(e.target.value); setPatentFile(null); }}
+                                  className={inputCls}
+                                >
+                                  <option value="">-- Select status --</option>
+                                  <option value="Pending">Pending</option>
+                                  <option value="Doing">Doing</option>
+                                  <option value="Applied">Applied</option>
+                                  <option value="Confirmed">Confirmed</option>
+                                </select>
+                                <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Step 4: Upload proof — only for Applied or Confirmed */}
+                          {(patentSubStatus === 'Applied' || patentSubStatus === 'Confirmed') && (
+                            <div>
                               <label className={labelCls}>
-                                Upload {patentStatus} Proof Document
+                                Upload {patentSubStatus === 'Applied' ? 'Applied Mail / Attachment' : 'Confirmation Letter / Mail'}
+                                <span className="text-red-500"> *</span>
                               </label>
-                              <div className="border-2 border-dashed border-gray-200 bg-gray-50 rounded-xl py-4 text-center hover:border-[#7B1535]/40 transition-colors">
+                              <div className="border-2 border-dashed border-gray-200 bg-gray-50 rounded-xl py-5 text-center hover:border-[#7B1535]/40 transition-colors">
                                 <input type="file" onChange={e => setPatentFile(e.target.files[0])}
                                   accept=".pdf,image/*" className="hidden" id="patent-file" />
                                 <label htmlFor="patent-file" className="cursor-pointer text-xs text-[#7B1535] hover:text-gray-900 transition-colors">
-                                  {patentFile ? patentFile.name : `Click to attach ${patentStatus.toLowerCase()} document`}
+                                  {patentFile
+                                    ? <span className="text-green-600 font-semibold">✅ {patentFile.name}</span>
+                                    : `Click to upload ${patentSubStatus.toLowerCase()} proof`}
                                 </label>
                               </div>
                             </div>

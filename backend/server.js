@@ -95,6 +95,7 @@ const ReviewSchema = new mongoose.Schema({
   submissionFile:{ type: String, default: "" },   // general doc (stage 3 & 4)
   pptFileName:   { type: String, default: "" },   // stage 1 & 2
   patentStatus:  { type: String, enum: ["", "Patent", "Publication"], default: "" },
+  patentSubStatus:{ type: String, enum: ["", "Pending", "Doing", "Applied", "Confirmed"], default: "" },
   patentFileName:{ type: String, default: "" },   // acceptance letter or applied mail screenshot
   comments:      [CommentSchema],
   status:        { type: String, enum: ["pending", "approved", "changes"], default: "pending" },
@@ -262,28 +263,49 @@ app.post("/api/teams", protect, async (req, res) => {
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
+const MAX_TEAMS = 8;  // hard cap per guide
+
 app.post("/api/teams/:id/select-guide", protect, async (req, res) => {
   try {
     const { guideId } = req.body;
-    const team  = await Team.findById(req.params.id);
-    if (!team) return res.status(404).json({ message: "Team not found" });
+
+    // Validate team belongs to this user and has no guide yet
+    const team = await Team.findOne({ _id: req.params.id, members: req.user._id, guideId: null });
+    if (!team) return res.status(400).json({ message: "Team not found or guide already selected." });
 
     const guide = await User.findById(guideId);
     if (!guide || guide.role !== "faculty") return res.status(404).json({ message: "Guide not found" });
 
-    // Count how many teams already assigned to this guide
-    const assignedCount = await Team.countDocuments({ guideId: guide._id });
-    if (assignedCount >= guide.maxTeams)
-      return res.status(400).json({ message: `Guide has reached the maximum of ${guide.maxTeams} teams.` });
+    const cap = Math.min(guide.maxTeams || MAX_TEAMS, MAX_TEAMS);
 
-    // Auto-approve: directly assign guide and unlock First Review
-    team.guideId       = guideId;
-    team.status        = "guide_approved";
-    team.currentReview = 1;  // unlock First Review immediately
-    await team.save();
-
-    const populated = await Team.findById(team._id).populate("members", "-password").populate("guideId", "-password");
-    res.json(populated);
+    // ── Atomic slot check-and-assign ──────────────────────────────────────
+    // Only increment if count is still below cap — prevents race conditions
+    // We use aggregation to count and update in one atomic step via a session
+    const session = await mongoose.startSession();
+    let populated;
+    try {
+      await session.withTransaction(async () => {
+        const currentCount = await Team.countDocuments({ guideId: guide._id }).session(session);
+        if (currentCount >= cap) {
+          throw { _isSlotFull: true, cap };
+        }
+        team.guideId       = guideId;
+        team.status        = "guide_approved";
+        team.currentReview = 1;
+        await team.save({ session });
+      });
+      populated = await Team.findById(team._id)
+        .populate("members", "-password")
+        .populate("guideId", "-password");
+      res.json(populated);
+    } catch (txErr) {
+      if (txErr._isSlotFull) {
+        return res.status(400).json({ message: `Sorry! ${guide.name} has no slots left. Please choose another guide.` });
+      }
+      throw txErr;
+    } finally {
+      session.endSession();
+    }
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
@@ -345,7 +367,7 @@ app.get("/api/reviews/:teamId", protect, async (req, res) => {
 
 app.post("/api/reviews/:teamId/submit", protect, upload.fields([{ name: 'document', maxCount: 1 }, { name: 'patentFile', maxCount: 1 }]), async (req, res) => {
   try {
-    const { patentStatus } = req.body;
+    const { patentStatus, patentSubStatus } = req.body;
     const team  = await Team.findById(req.params.teamId);
     if (!team) return res.status(404).json({ message: "Team not found" });
 
@@ -358,7 +380,8 @@ app.post("/api/reviews/:teamId/submit", protect, upload.fields([{ name: 'documen
 
     review.status      = "pending";
     review.submittedAt = new Date();
-    if (patentStatus !== undefined) review.patentStatus = patentStatus;
+    if (patentStatus    !== undefined) review.patentStatus    = patentStatus;
+    if (patentSubStatus !== undefined) review.patentSubStatus = patentSubStatus;
 
     if (req.files) {
       if (req.files.document) {
