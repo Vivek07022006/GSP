@@ -8,14 +8,20 @@ mongoose.connect(process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/guide_porta
 
 const UserSchema = new mongoose.Schema({
   name: { type: String, required: true, trim: true },
-  email: { type: String, required: true, unique: true, lowercase: true, trim: true },
+  email: { 
+    type: String, 
+    lowercase: true, 
+    trim: true, 
+    sparse: true, // Allows documents without an email field to exist together
+    unique: true  
+  },
   password: { type: String, required: true },
   role: { type: String, enum: ['student', 'faculty', 'admin'], default: 'student' },
   registerNumber: { type: String, default: '' },
   staffId: { type: String, default: '' },
   phone: { type: String, default: '' },
   specialization: { type: String, default: '' },
-  photoFile: { type: String, default: '' },  // filename in /Photos folder e.g. "Dr.Kamatchi K.S.jpg"
+  photoFile: { type: String, default: '' }, 
   maxTeams: { type: Number, default: 8 },
 }, { timestamps: true });
 
@@ -26,8 +32,7 @@ UserSchema.pre('save', async function () {
 
 const User = mongoose.model('User', UserSchema);
 
-// ── FACULTY DATA — ordered exactly as per the provided sheets ──────────────
-// photoFile: exact filename from C:\...\GSP\Photos\
+// ── FACULTY DATA ─────────────────────────────────────────────────────────────
 const facultyList = [
   {
     staffId: '100514', name: 'Dr. Kamatchi K S',
@@ -137,255 +142,372 @@ const facultyList = [
     specialization: 'Cyber Security, Blockchain, Cryptography and Network Security',
     photoFile: 'Shamili P.jpg',
   },
-];
-
-// ── DEMO STUDENTS ─────────────────────────────────────────────────────────────
-const studentList = [
-  { name: 'Vivek S', email: 'vivek@student.com', phone: '9999999999', registerNumber: '43120237' },
-  { name: 'Vikram A', email: 'vikram@student.com', phone: '9999999999', registerNumber: '43120235' },
-  { name: 'Priya M', email: 'sk@student.com', phone: '9999999999', registerNumber: '43120196' },
-  { name: 'Arjun K', email: 'udaya@student.com', phone: '9999999999', registerNumber: '43120227' },
-  { name: 'Vikram A', email: 'tamil@student.com', phone: '9999999999', registerNumber: '43120224' },
-  { name: 'Priya M', email: 'harshini@student.com', phone: '9999999999', registerNumber: '43120209' },
-  { name: 'Arjun K', email: 'suria@student.com', phone: '9999999999', registerNumber: '43120219' },
-  { name: 'Vikram A', email: 'shrinivas@student.com', phone: '9999999999', registerNumber: '43120204' },
-  { name: 'Priya M', email: 'harsha@student.com', phone: '9999999999', registerNumber: '43120211' },
-  
-
-];
-
-const seedData = async () => {
-  try {
-
-    console.log('🌱 Creating admin...');
-    await new User({ name: 'Admin', email: 'admin@test.com', password: 'admin123', role: 'admin' }).save();
-    await new User({ name: 'Admin', email: 'admin@test.com', password: 'admin123', role: 'admin' }).save();
-
-    console.log(`🌱 Creating ${facultyList.length} faculty members...`);
-    for (const f of facultyList) {
-      await new User({
-        name: f.name, email: f.email,
-        password: f.phone,   // password = phone number (hashed by pre-save hook)
-        role: 'faculty', phone: f.phone, staffId: f.staffId,
-        specialization: f.specialization, photoFile: f.photoFile, maxTeams: 10,
-      }).save();
-      process.stdout.write(`  ✓ [${f.staffId}] ${f.name}  →  ${f.photoFile}\n`);
-    }
-
-    console.log('🌱 Creating students...');
-    for (const s of studentList) {
-      await new User({
-        name: s.name, email: s.email, password: 'password',
-        role: 'student', phone: s.phone, registerNumber: s.registerNumber,
-      }).save();
-      process.stdout.write(`  ✓ ${s.name} [${s.registerNumber}]\n`);
-    }
-
-    console.log('\n🎉 Seeding Complete!\n');
-    console.log('═══════════════════════════════════════════════════════════════');
-    console.log('ADMIN   : admin@test.com                        / admin123');
-    console.log('FACULTY : <official_email>                      / <phone_number>');
-    console.log('  e.g.  : kamatchi.k.s.it@sathyabama.ac.in     / 8903676173');
-    console.log('STUDENT : vivek@student.com                     / password');
-    console.log('═══════════════════════════════════════════════════════════════\n');
-    process.exit(0);
-  } catch (err) {
-    console.error('❌ Seed error:', err.message);
-    process.exit(1);
+  {
+    name: 'Dr. Mary Posonia A',
+    email: 'maryposonia@sathyabama.ac.in',
+    staffId: '',
+    phone: '9489601850',
+    specialization: 'Artificial Intelligence , Machine Learning , Internet of Things ,Network Security',
+    photoFile: 'Mary Posonia.jpg',
+  },
+  {
+    name: 'Mr. Saravanana Kumar V',
+    email: 'saravanakumar.v.it@sathyabama.ac.in',
+    staffId: '',
+    phone: '9600488500',
+    specialization: 'AIML',
+    photoFile: '',
+  },
+  {
+    name: 'Dr. Sathyaraj A',
+    email: 'sathiyaraj.a.it@sathyabama.ac.in',
+    staffId: '',
+    phone: '9444043846',
+    specialization: 'AIML',
+    photoFile: 'citations.jpg',
   }
-};
-
-seedData();
-require('dotenv').config();
-const mongoose = require('mongoose');
-const bcrypt = require('bcryptjs');
-
-mongoose.connect(process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/guide_portal_demo')
-  .then(() => console.log('✅ DB Connected for Seeding'))
-  .catch(err => { console.error('❌ DB Error:', err.message); process.exit(1); });
-
-const UserSchema = new mongoose.Schema({
-  name: { type: String, required: true, trim: true },
-  email: { type: String, required: true, unique: true, lowercase: true, trim: true },
-  password: { type: String, required: true },
-  role: { type: String, enum: ['student', 'faculty', 'admin'], default: 'student' },
-  registerNumber: { type: String, default: '' },
-  staffId: { type: String, default: '' },
-  phone: { type: String, default: '' },
-  specialization: { type: String, default: '' },
-  photoFile: { type: String, default: '' },  // filename in /Photos folder e.g. "Dr.Kamatchi K.S.jpg"
-  maxTeams: { type: Number, default: 10 },
-}, { timestamps: true });
-
-UserSchema.pre('save', async function () {
-  if (!this.isModified('password')) return;
-  this.password = await bcrypt.hash(this.password, 10);
-});
-
-const User = mongoose.model('User', UserSchema);
-
-// ── FACULTY DATA — ordered exactly as per the provided sheets ──────────────
-// photoFile: exact filename from C:\...\GSP\Photos\
-const facultyList = [
-  {
-    staffId: '100514', name: 'Dr. Kamatchi K S',
-    email: 'kamatchi.k.s.it@sathyabama.ac.in', phone: '8903676173',
-    specialization: 'IoT, Cyber Security, Artificial Intelligence, Big Data',
-    photoFile: 'Dr.Kamatchi K.S.jpg',
-  },
-  {
-    staffId: '101108', name: 'Ms. Gopika P',
-    email: 'gopika.p.it@gmail.com', phone: '7806998545',
-    specialization: 'ML',
-    photoFile: 'GOPIKA P.jpeg',
-  },
-  {
-    staffId: '100986', name: 'Hema Prasanna K',
-    email: 'hemaprasanna.s.it@sathyabama.ac.in', phone: '9840331589',
-    specialization: 'AIML',
-    photoFile: 'HEMA PRASANNA KATARI.jpg',
-  },
-  {
-    staffId: '100444', name: 'Ms. D. Ramalakshmi',
-    email: 'ramalakshmi.d.it@sathyabama.ac.in', phone: '9551615005',
-    specialization: 'AI AND ML',
-    photoFile: 'RAMALAKSHMI D.jpeg',
-  },
-  {
-    staffId: '101111', name: 'S. Philomina',
-    email: 'philomina.s.it@sathyabama.ac.in', phone: '7397389444',
-    specialization: 'Deep Learning',
-    photoFile: 'PHILOMINA S.jpeg',
-  },
-  {
-    staffId: '100802', name: 'Tina Victoria A',
-    email: 'tinavictoria.a.it@sathyabama.ac.in', phone: '9486127785',
-    specialization: 'Fog Computing, Web Technology',
-    photoFile: 'Tina Victoria - Tina Victoria.jpg',
-  },
-  {
-    staffId: '100489', name: 'Dr. K. Sundara Velrani',
-    email: 'sundaravelrani.k.it@sathyabama.ac.in', phone: '9840185872',
-    specialization: 'Cloud Security, Network Security, Machine Learning, Big Data',
-    photoFile: 'Dr. K. SUNDRA VELRANI.JPG',
-  },
-  {
-    staffId: '100458', name: 'J. Merlin Mary Jenitha',
-    email: 'merlinmaryjenitha.it@sathyabama.ac.in', phone: '9787420328',
-    specialization: 'Artificial Intelligence',
-    photoFile: 'MERLIN MARY JENITHA.JPG',
-  },
-  {
-    staffId: '100811', name: 'K. Arunkumar',
-    email: 'arunkumar.k.it@sathyabama.ac.in', phone: '7639289908',
-    specialization: 'Image Processing',
-    photoFile: 'ARUNKUMAR K.JPG',
-  },
-  {
-    staffId: '100764', name: 'Ms. R. Geetha',
-    email: 'geetha.r.it@sathyabama.ac.in', phone: '7358272179',
-    specialization: 'Information Technology',
-    photoFile: 'Geetha R.jpg',
-  },
-  {
-    staffId: '100279', name: 'Dr. C. Geetha',
-    email: 'cgeetha.it@sathyabama.ac.in', phone: '9176454299',
-    specialization: 'Machine Learning and Data Analytics',
-    photoFile: 'GEETHA C.JPG',
-  },
-  {
-    staffId: '100792', name: 'Dr. R. Ramya',
-    email: 'ramya.r.it@sathyabama.ac.in', phone: '9788706440',
-    specialization: 'Edge Intelligence',
-    photoFile: 'Ramya R.jpg',
-  },
-  {
-    staffId: '9203', name: 'Dr. P. Jeyanthi',
-    email: 'jeyanthi.it@sathyabama.ac.in', phone: '9384001375',
-    specialization: 'Deep Learning, Data Mining, Bigdata Analysis',
-    photoFile: 'Jeyanthi P.jpg',
-  },
-  {
-    staffId: '20027', name: 'Dr. L. Mary Gladence',
-    email: 'marygladence.it@sathyabama.ac.in', phone: '9551083116',
-    specialization: 'Machine Learning',
-    photoFile: 'Mary Gladence.jpg',
-  },
-  {
-    staffId: '101110', name: 'Ms. S. Yuvasree',
-    email: 'yuvasree.s.it@sathyabama.ac.in', phone: '9150860752',
-    specialization: 'Deep Learning',
-    photoFile: 'Yuvasree S.jpg',
-  },
-  {
-    staffId: '101109', name: 'Ms. Sweadha M',
-    email: 'sweadha.m.it@sathyabama.ac.in', phone: '7305340549',
-    specialization: 'ML',
-    photoFile: 'SWEADHA M.jpeg',
-  },
-  {
-    staffId: '100843', name: 'Oormila L',
-    email: 'oormila.l.it@sathyabama.ac.in', phone: '9962306513',
-    specialization: 'Deep Learning',
-    photoFile: 'Oormila L.jpg',
-  },
-  {
-    staffId: '100703', name: 'Ms. P. Shamili',
-    email: 'shamili.p.it@sathyabama.ac.in', phone: '7904643017',
-    specialization: 'Cyber Security, Blockchain, Cryptography and Network Security',
-    photoFile: 'Shamili P.jpg',
-  },
 ];
 
-// ── DEMO STUDENTS ─────────────────────────────────────────────────────────────
+// ── STUDENTS DATA ────────────────────────────────────────────────────────────
 const studentList = [
-  { name: 'Vivek S', email: 'vivek@student.com', phone: '9999999999', registerNumber: '43120237' },
-  { name: 'Vikram A', email: 'vikram@student.com', phone: '9999999999', registerNumber: '43120235' },
-  { name: 'Priya M', email: 'sk@student.com', phone: '9999999999', registerNumber: '43120196' },
-  { name: 'Arjun K', email: 'udaya@student.com', phone: '9999999999', registerNumber: '43120227' },
-  { name: 'Vikram A', email: 'tamil@student.com', phone: '9999999999', registerNumber: '43120224' },
-  { name: 'Priya M', email: 'harshini@student.com', phone: '9999999999', registerNumber: '43120209' },
-  { name: 'Arjun K', email: 'suria@student.com', phone: '9999999999', registerNumber: '43120219' },
-  { name: 'Vikram A', email: 'shrinivas@student.com', phone: '9999999999', registerNumber: '43120204' },
-  { name: 'Priya M', email: 'harsha@student.com', phone: '9999999999', registerNumber: '43120211' },
-  
-
+  { name: 'ASFAAK A', registerNumber: '43120001' },
+  { name: 'R ABISHA', registerNumber: '43120002' },
+  { name: 'ABISHEK M', registerNumber: '43120003' },
+  { name: 'ADHITHYA T', registerNumber: '43120004' },
+  { name: 'R AGHILESWARAN', registerNumber: '43120005' },
+  { name: 'AHAMED FAYAZ A', registerNumber: '43120006' },
+  { name: 'AJAY MARWIN S', registerNumber: '43120007' },
+  { name: 'AJAY PANDIAN S', registerNumber: '43120008' },
+  { name: 'AKSHAN G', registerNumber: '43120009' },
+  { name: 'ALEXSON N', registerNumber: '43120010' },
+  { name: 'AMANRAJ S', registerNumber: '43120012' },
+  { name: 'AMITH JAYAKUMAR V K', registerNumber: '43120013' },
+  { name: 'ANBARASAN T', registerNumber: '43120014' },
+  { name: 'ANTHONY JESWIN G', registerNumber: '43120015' },
+  { name: 'ARAVINDHAN K', registerNumber: '43120016' },
+  { name: 'ARCHANA.K', registerNumber: '43120017' },
+  { name: 'ARIVOLI A', registerNumber: '43120018' },
+  { name: 'ARJUN K', registerNumber: '43120019' },
+  { name: 'ARNOLD RUBAN VICTOR S', registerNumber: '43120020' },
+  { name: 'ARJUN SRIDHAR', registerNumber: '43120021' },
+  { name: 'ASHIQ NOOR MOHAMMED R', registerNumber: '43120022' },
+  { name: 'ASWIN SHIJO R S', registerNumber: '43120023' },
+  { name: 'ASWINI S', registerNumber: '43120024' },
+  { name: 'AVANTIKA C', registerNumber: '43120026' },
+  { name: 'BALAJI S', registerNumber: '43120027' },
+  { name: 'BENEDICT NIHAL I S', registerNumber: '43120028' },
+  { name: 'D NINIVIN', registerNumber: '43120030' },
+  { name: 'DANGETI SAI CHARAN', registerNumber: '43120031' },
+  { name: 'DAVISH JEFFERSON J', registerNumber: '43120032' },
+  { name: 'DAYA DARSHINI K', registerNumber: '43120033' },
+  { name: 'DEEPAN B', registerNumber: '43120034' },
+  { name: 'DEVADHARSHINI R', registerNumber: '43120036' },
+  { name: 'DEVAN D', registerNumber: '43120037' },
+  { name: 'DHANYASREE THALASAYANAN', registerNumber: '43120038' },
+  { name: 'DHARNISH B', registerNumber: '43120039' },
+  { name: 'DHARSHAN D', registerNumber: '43120040' },
+  { name: 'D DHARSHAN SAI', registerNumber: '43120041' },
+  { name: 'DHARSHIHA P', registerNumber: '43120042' },
+  { name: 'DHARSHINI S', registerNumber: '43120043' },
+  { name: 'DHINESH R', registerNumber: '43120044' },
+  { name: 'DHISHYA N', registerNumber: '43120045' },
+  { name: 'DHIVAKAR R', registerNumber: '43120046' },
+  { name: 'DIVYA VARSHINEE R', registerNumber: '43120047' },
+  { name: 'DOSHIK KRISHNA E', registerNumber: '43120048' },
+  { name: 'FEROZIYA BANU Z', registerNumber: '43120050' },
+  { name: 'SUJITH G', registerNumber: '43120051' },
+  { name: 'GAYATHRI S', registerNumber: '43120052' },
+  { name: 'GNANA JERIN C', registerNumber: '43120053' },
+  { name: 'GOLDIYA ANLIN R A', registerNumber: '43120054' },
+  { name: 'GOVI ANBU SELVI A', registerNumber: '43120055' },
+  { name: 'GOWTHAM L', registerNumber: '43120056' },
+  { name: 'GOWTHAM R', registerNumber: '43120057' },
+  { name: 'HARI HARAN J', registerNumber: '43120058' },
+  { name: 'HARIGANESH N', registerNumber: '43120059' },
+  { name: 'HARIHARA SUDAN P S', registerNumber: '43120060' },
+  { name: 'HARINI R', registerNumber: '43120062' },
+  { name: 'HARIRAM S', registerNumber: '43120063' },
+  { name: 'P.HARISH', registerNumber: '43120064' },
+  { name: 'HARISH S', registerNumber: '43120065' },
+  { name: 'HARIVELAN G', registerNumber: '43120066' },
+  { name: 'HARSHAVARDHINI S', registerNumber: '43120067' },
+  { name: 'HAYAGRIEVAN S', registerNumber: '43120068' },
+  { name: 'HENRY SAM MOSES D', registerNumber: '43120069' },
+  { name: 'IMRAN KHAN I', registerNumber: '43120070' },
+  { name: 'J MUHAMMED ZAID', registerNumber: '43120071' },
+  { name: 'SENDOURAMOORTHY J', registerNumber: '43120072' },
+  { name: 'JAFFRILIN J', registerNumber: '43120073' },
+  { name: 'JAGADEESHWAR D', registerNumber: '43120074' },
+  { name: 'JAI PRAKASH V', registerNumber: '43120075' },
+  { name: 'JAISHREE K', registerNumber: '43120076' },
+  { name: 'JANANI A', registerNumber: '43120077' },
+  { name: 'JANANI S', registerNumber: '43120078' },
+  { name: 'JEEVA S', registerNumber: '43120079' },
+  { name: 'JENISH SHERLIN D', registerNumber: '43120080' },
+  { name: 'JEROM A', registerNumber: '43120081' },
+  { name: 'JEYAVARSHA S', registerNumber: '43120082' },
+  { name: 'JEYSRI K', registerNumber: '43120083' },
+  { name: 'JIVIKA M', registerNumber: '43120084' },
+  { name: 'JOHNSON KUMAR A', registerNumber: '43120085' },
+  { name: 'JOSE LYVIN S', registerNumber: '43120086' },
+  { name: 'JUDA HARITH A', registerNumber: '43120087' },
+  { name: 'JULIAN FERNANDO', registerNumber: '43120088' },
+  { name: 'KARTHIKEYAN R', registerNumber: '43120090' },
+  { name: 'KAUSHIK S', registerNumber: '43120091' },
+  { name: 'KAVIN K', registerNumber: '43120092' },
+  { name: 'KAYALVIZHI NATHAN', registerNumber: '43120093' },
+  { name: 'KEERTHANA GOPAL', registerNumber: '43120094' },
+  { name: 'KEERTHANA KAMALAKANNAN', registerNumber: '43120095' },
+  { name: 'KEERTHIKUMAR N G', registerNumber: '43120096' },
+  { name: 'KIRUBAKARAN A', registerNumber: '43120097' },
+  { name: 'KISHORE C', registerNumber: '43120098' },
+  { name: 'KISHORE MOORTHY S', registerNumber: '43120099' },
+  { name: 'KISHORE T', registerNumber: '43120100' },
+  { name: 'S KIYAS MOHAMED', registerNumber: '43120101' },
+  { name: 'LINGESHWARAN G', registerNumber: '43120102' },
+  { name: 'LOGAESWARAN S', registerNumber: '43120103' },
+  { name: 'J LOGESHWARAN', registerNumber: '43120104' },
+  { name: 'ABISHANTH JEGAN M', registerNumber: '43120105' },
+  { name: 'ADHIK IGTHISHAAM M', registerNumber: '43120106' },
+  { name: 'JASSIM DAWOOD M', registerNumber: '43120107' },
+  { name: 'KOWSALYA M', registerNumber: '43120108' },
+  { name: 'MADESH DILLIBAN K', registerNumber: '43120109' },
+  { name: 'MADHANKUMAR V', registerNumber: '43120110' },
+  { name: 'MADHI VARMAN', registerNumber: '43120111' },
+  { name: 'MADHU METHA A', registerNumber: '43120112' },
+  { name: 'MADHUSUTHAN N', registerNumber: '43120113' },
+  { name: 'MAHENDIRAN MARIMUTHU', registerNumber: '43120114' },
+  { name: 'MAHESH C', registerNumber: '43120115' },
+  { name: 'MANIKANDAN S', registerNumber: '43120116' },
+  { name: 'MANOJ KUMAR V', registerNumber: '43120117' },
+  { name: 'MANUSRI R', registerNumber: '43120118' },
+  { name: 'MARIA MARY ARLIN M', registerNumber: '43120119' },
+  { name: 'MASHHOODAH N', registerNumber: '43120120' },
+  { name: 'MAYANK DHANDH', registerNumber: '43120121' },
+  { name: 'MELVIN K', registerNumber: '43120122' },
+  { name: 'MOHAMED RASIQ S', registerNumber: '43120123' },
+  { name: 'MOHAMED RIZWAN T A', registerNumber: '43120124' },
+  { name: 'MOHAMMED HUSSIAN JAMALIA A', registerNumber: '43120125' },
+  { name: 'MOHAMMED IMRAN N', registerNumber: '43120126' },
+  { name: 'MOHAMMED MOOSA U', registerNumber: '43120127' },
+  { name: 'MOHAMMED RUMAIZ R', registerNumber: '43120128' },
+  { name: 'MOHANAPRIYA R S', registerNumber: '43120129' },
+  { name: 'MONISH KANNAN R.D', registerNumber: '43120130' },
+  { name: 'M MUKILAN', registerNumber: '43120131' },
+  { name: 'MURALI KANNAN M', registerNumber: '43120132' },
+  { name: 'NAKSHATRA T', registerNumber: '43120134' },
+  { name: 'NANCY JOAN S', registerNumber: '43120135' },
+  { name: 'NAREN RAGHAV B S', registerNumber: '43120136' },
+  { name: 'NAVEENRAJ K', registerNumber: '43120137' },
+  { name: 'NAVEEN SATHYA S', registerNumber: '43120138' },
+  { name: 'NAVINKUMAR T', registerNumber: '43120139' },
+  { name: 'NEHRUESHWARAN V', registerNumber: '43120140' },
+  { name: 'NIRESH A', registerNumber: '43120141' },
+  { name: 'NISHALL B E', registerNumber: '43120142' },
+  { name: 'NITHISH R', registerNumber: '43120143' },
+  { name: 'NITISH KUMAR', registerNumber: '43120144' },
+  { name: 'THARANRAJ P', registerNumber: '43120145' },
+  { name: 'PANDETI DIYA VARMA', registerNumber: '43120146' },
+  { name: 'PASUPULETI LAKSHMI PRIYA', registerNumber: '43120147' },
+  { name: 'PON KAVIYA S', registerNumber: '43120148' },
+  { name: 'D M POOJA JASMINE', registerNumber: '43120149' },
+  { name: 'PRADEEP M', registerNumber: '43120150' },
+  { name: 'PRAGATHEES A', registerNumber: '43120151' },
+  { name: 'PRASANNA M', registerNumber: '43120153' },
+  { name: 'PRASHANTH R', registerNumber: '43120154' },
+  { name: 'C PRAVEEN', registerNumber: '43120155' },
+  { name: 'PRAVEEN KUMAR O', registerNumber: '43120156' },
+  { name: 'PRAVEEN T', registerNumber: '43120157' },
+  { name: 'PRAVEEN.M', registerNumber: '43120158' },
+  { name: 'PREM KUMAR S', registerNumber: '43120159' },
+  { name: 'PRISIL JESIN M', registerNumber: '43120160' },
+  { name: 'PUNITHAN M', registerNumber: '43120161' },
+  { name: 'R GAAYATHRI DEVI', registerNumber: '43120162' },
+  { name: 'RAAFIYA TASKEEN A', registerNumber: '43120163' },
+  { name: 'RAHESH R', registerNumber: '43120164' },
+  { name: 'RAHUL R', registerNumber: '43120165' },
+  { name: 'M RAJAVEL', registerNumber: '43120166' },
+  { name: 'RAKUL Y', registerNumber: '43120167' },
+  { name: 'RAMKUMAR K', registerNumber: '43120168' },
+  { name: 'REEMA SUREYA B', registerNumber: '43120169' },
+  { name: 'S A RESHMA ASSINA', registerNumber: '43120170' },
+  { name: 'REZON EDMOND R', registerNumber: '43120171' },
+  { name: 'RISHWANTH G V', registerNumber: '43120172' },
+  { name: 'ROHAN S', registerNumber: '43120173' },
+  { name: 'ROSHAN N H', registerNumber: '43120174' },
+  { name: 'RUBY DOSS B', registerNumber: '43120176' },
+  { name: 'AADHITHYA VARMAN S', registerNumber: '43120177' },
+  { name: 'KARTHICK RAJA S', registerNumber: '43120178' },
+  { name: 'SABARIS R', registerNumber: '43120179' },
+  { name: 'SACHIN B', registerNumber: '43120180' },
+  { name: 'SACHIN S', registerNumber: '43120181' },
+  { name: 'SAKITHYAN K', registerNumber: '43120182' },
+  { name: 'SAMUEL SMART S', registerNumber: '43120183' },
+  { name: 'SANDHARUBAN R', registerNumber: '43120184' },
+  { name: 'SANDHIYA R', registerNumber: '43120185' },
+  { name: 'SANDHIYA T', registerNumber: '43120186' },
+  { name: 'SANJAI RAM P', registerNumber: '43120187' },
+  { name: 'SANJAY G', registerNumber: '43120189' },
+  { name: 'SANJAY H', registerNumber: '43120190' },
+  { name: 'SANJAY KUMAR. T', registerNumber: '43120191' },
+  { name: 'SANJAY V', registerNumber: '43120192' },
+  { name: 'SANTHA KUMAR L', registerNumber: '43120193' },
+  { name: 'SANTHOSH A S', registerNumber: '43120194' },
+  { name: 'SANTHOSH KUMAR K', registerNumber: '43120195' },
+  { name: 'SARAVANAN S K', registerNumber: '43120196' },
+  { name: 'SARVA PRIYA S', registerNumber: '43120197' },
+  { name: 'SELVARASAN S', registerNumber: '43120198' },
+  { name: 'SHAKTHIVEL R', registerNumber: '43120199' },
+  { name: 'SHARMILA E', registerNumber: '43120200' },
+  { name: 'R.SHASINDHAR', registerNumber: '43120201' },
+  { name: 'SHERLY V K', registerNumber: '43120202' },
+  { name: 'SHRI VETTRI VENDHAN.D', registerNumber: '43120203' },
+  { name: 'SHRINIVAS M', registerNumber: '43120204' },
+  { name: 'SHRIVATHSAN S', registerNumber: '43120205' },
+  { name: 'SHWET DUTTA', registerNumber: '43120206' },
+  { name: 'SHYAM T', registerNumber: '43120207' },
+  { name: 'SREE HARSHINI G', registerNumber: '43120209' },
+  { name: 'SREEJA S', registerNumber: '43120210' },
+  { name: 'B. SRI HARSHA', registerNumber: '43120211' },
+  { name: 'SRIDHAR D', registerNumber: '43120212' },
+  { name: 'SRINIVASAN L', registerNumber: '43120213' },
+  { name: 'SRIVATSAN.T', registerNumber: '43120214' },
+  { name: 'SUDHARSHUN G', registerNumber: '43120215' },
+  { name: 'SUGANTH KESAVAN', registerNumber: '43120216' },
+  { name: 'SUJEET KUMAR MONDAL', registerNumber: '43120217' },
+  { name: 'SUREKA N', registerNumber: '43120218' },
+  { name: 'SURIA PRASATH K', registerNumber: '43120219' },
+  { name: 'SURIYA PRAKASH S', registerNumber: '43120220' },
+  { name: 'SURYA R', registerNumber: '43120221' },
+  { name: 'SUWASTHIKA R', registerNumber: '43120222' },
+  { name: 'SWATHI SRINIVASAN', registerNumber: '43120223' },
+  { name: 'TAMILARASU D', registerNumber: '43120224' },
+  { name: 'THIRUMALAI T', registerNumber: '43120225' },
+  { name: 'TITUS', registerNumber: '43120226' },
+  { name: 'UDAYAKUMAR S', registerNumber: '43120227' },
+  { name: 'INBHA V', registerNumber: '43120228' },
+  { name: 'VAISHALI A', registerNumber: '43120229' },
+  { name: 'VAISHNAVI S', registerNumber: '43120230' },
+  { name: 'VARMAN KARTHIK J', registerNumber: '43120231' },
+  { name: 'VARUN S', registerNumber: '43120232' },
+  { name: 'VIBUNATH K M', registerNumber: '43120233' },
+  { name: 'VIJAY AMUL RAJ L J', registerNumber: '43120234' },
+  { name: 'VIKRAM A', registerNumber: '43120235' },
+  { name: 'VISHNU S', registerNumber: '43120236' },
+  { name: 'VIVEK S', registerNumber: '43120237' },
+  { name: 'D. YOGESWARAN', registerNumber: '43120238' },
+  { name: 'YOKESH R', registerNumber: '43120239' },
+  { name: 'SAMSUDEEN M', registerNumber: '43120240' },
+  { name: 'VIJAY S', registerNumber: '43120241' },
+  { name: 'SHANJAI KARTHIKEYAN M', registerNumber: '43120242' },
+  { name: 'MADHANRAJ J', registerNumber: '43120244' },
+  { name: 'ABINAYA K', registerNumber: '43120245' },
+  { name: 'NIRANJAN R', registerNumber: '43120246' },
+  { name: 'SHANKAR GANESH M', registerNumber: '43120247' },
+  { name: 'HEMANTH KUMAR.A', registerNumber: '43120248' },
+  { name: 'RAJESH KANNAN S', registerNumber: '43120249' },
+  { name: 'RANJINI M', registerNumber: '43120250' },
+  { name: 'GUNASEELAN S', registerNumber: '43120251' },
+  { name: 'BHUVANESH M', registerNumber: '43120252' },
+  { name: 'RANJANA S', registerNumber: '43120253' },
+  { name: 'GAJULA AJAY', registerNumber: '43120254' },
+  { name: 'PRAVEEN KUMAR S', registerNumber: '43120255' },
+  { name: 'DHARSHNI.S', registerNumber: '43120256' },
+  { name: 'VINAYA SREE K', registerNumber: '43120257' },
+  { name: 'CHANDRU P', registerNumber: '43120258' },
+  { name: 'RAM RAKESH B', registerNumber: '43120259' },
+  { name: 'GOPI R', registerNumber: '43120260' },
+  { name: 'SEENIVASAN K', registerNumber: '43120261' },
+  { name: 'BARATH RAJ B', registerNumber: '43120262' },
+  { name: 'KEERTHIKA NARAYANA MOORTHY', registerNumber: '43120263' },
+  { name: 'VIJAY ANDERSON A', registerNumber: '43120264' },
+  { name: 'AKSHAYA G M', registerNumber: '43120265' },
+  { name: 'SHREE HARINEE G T', registerNumber: '43120266' },
+  { name: 'DINESH S', registerNumber: '43120267' },
+  { name: 'JAYAPRIYA R', registerNumber: '43120268' },
+  { name: 'DEVADHARSHINI S', registerNumber: '43120269' },
+  { name: 'NUHA ZAHRA FATHIMA A', registerNumber: '43120270' },
+  { name: 'VIGNESHWARAN T', registerNumber: '43120271' },
+  { name: 'KARTHICK C', registerNumber: '43120272' },
+  { name: 'HARIJ K', registerNumber: '43120273' },
+  { name: 'S. HARRISH SARAVANAN', registerNumber: '43120274' },
+  { name: 'ARUN R', registerNumber: '43120275' },
+  { name: 'BALAJI V', registerNumber: '43120276' },
+  { name: 'ARAVINTHKRISHNAN S', registerNumber: '43120277' },
+  { name: 'THIRUNEELAKANDAN M', registerNumber: '43120278' },
+  { name: 'NISHANTH V', registerNumber: '43120279' },
+  { name: 'SANJAY R', registerNumber: '43120280' },
+  { name: 'SHANMUGAVEL B', registerNumber: '43120281' },
+  { name: 'NIRESH KUMAR S', registerNumber: '43120282' },
+  { name: 'SRINITHI M', registerNumber: '43120283' },
+  { name: 'PRANAVESH PALANI KUMARAN', registerNumber: '43120284' },
+  { name: 'NAVIN KUMAR V', registerNumber: '43120285' },
+  { name: 'PRAMOOTH SAI', registerNumber: '43120286' },
+  { name: 'KESAVARAO K B', registerNumber: '43120287' },
+  { name: 'VINAYSRI R', registerNumber: '43120288' },
+  { name: 'JANANI K', registerNumber: '43120289' },
+  { name: 'THILAK R', registerNumber: '43120290' },
+  { name: 'NIRANCHAN D', registerNumber: '43120291' },
+  { name: 'SRIHARI K', registerNumber: '43120292' },
+  { name: 'M SWETHA', registerNumber: '43120293' },
+  { name: 'SABARISH V', registerNumber: '43120294' },
+  { name: 'SACHIN S', registerNumber: '43120295' },
+  { name: 'SHARVANTHRAM. R', registerNumber: '43120296' },
+  { name: 'S VARUN KUMAR', registerNumber: '43120298' },
+  { name: 'SHASHANK KUMAR', registerNumber: '43120299' },
+  { name: 'VASILIS.G', registerNumber: '43120301' },
+  { name: 'CHANDRU.J', registerNumber: '43120302' },
+  { name: 'SHANKAVI RAVICHANDRAN', registerNumber: '43120303' },
+  { name: 'GAYATHRI N', registerNumber: '43120304' },
+  { name: 'SHRADDHA', registerNumber: '43120305' },
+  { name: 'GOURAV BESAN', registerNumber: '43120306' },
+  { name: 'ROSHAN FELIX S', registerNumber: '43120307' },
+  { name: 'SHRI VISHNU D', registerNumber: '43120308' },
+  { name: 'ABHINAV KRISHNA R', registerNumber: '43120701' },
+  { name: 'GADIRAJU SAI VAISHNAVI', registerNumber: '43120702' },
+  { name: 'MANOJ K', registerNumber: '43120703' },
+  { name: 'HARISH KUMAR M', registerNumber: '43120704' },
+  { name: 'S.DHIVAKARAN', registerNumber: '43120705' }
 ];
 
 const seedData = async () => {
   try {
+    // Drop the users collection completely to clear old, non-sparse indexes
+    try {
+      await mongoose.connection.collections['users'].drop();
+      console.log('🧹 Cleaned existing users collection and old indexes.');
+    } catch (e) {
+      // Collection might not exist yet, safe to ignore
+    }
 
     console.log('🌱 Creating admin...');
     await new User({ name: 'Admin', email: 'admin@test.com', password: 'admin123', role: 'admin' }).save();
-    await new User({ name: 'Admin', email: 'admin@test.com', password: 'admin123', role: 'admin' }).save();
+    await new User({ name: 'IT HOD', email: 'ithod@sathyabama.ac.in', password: 'admin123', role: 'admin' }).save();
 
     console.log(`🌱 Creating ${facultyList.length} faculty members...`);
     for (const f of facultyList) {
       await new User({
         name: f.name, email: f.email,
-        password: f.phone,   // password = phone number (hashed by pre-save hook)
+        password: f.phone ,
         role: 'faculty', phone: f.phone, staffId: f.staffId,
         specialization: f.specialization, photoFile: f.photoFile, maxTeams: 8,
       }).save();
-      process.stdout.write(`  ✓ [${f.staffId}] ${f.name}  →  ${f.photoFile}\n`);
+      process.stdout.write(`  ✓ [${f.staffId || 'N/A'}] ${f.name}  →  ${f.photoFile || 'No Photo'}\n`);
     }
 
     console.log('🌱 Creating students...');
     for (const s of studentList) {
+      // Explicitly leaving email field completely undefined so sparse indexing skips it
       await new User({
-        name: s.name, email: s.email, password: 'password',
-        role: 'student', phone: s.phone, registerNumber: s.registerNumber,
+        name: s.name, 
+        password: s.registerNumber,
+        role: 'student', 
+        registerNumber: s.registerNumber,
       }).save();
       process.stdout.write(`  ✓ ${s.name} [${s.registerNumber}]\n`);
     }
 
-    console.log('\n🎉 Seeding Complete!\n');
-    console.log('═══════════════════════════════════════════════════════════════');
-    console.log('ADMIN   : admin@test.com                        / admin123');
-    console.log('FACULTY : <official_email>                      / <phone_number>');
-    console.log('  e.g.  : kamatchi.k.s.it@sathyabama.ac.in     / 8903676173');
-    console.log('STUDENT : vivek@student.com                     / password');
-    console.log('═══════════════════════════════════════════════════════════════\n');
+    console.log('\n🎉 Seeding Complete Successfully!\n');
     process.exit(0);
   } catch (err) {
     console.error('❌ Seed error:', err.message);
