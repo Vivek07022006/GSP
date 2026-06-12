@@ -52,36 +52,24 @@ export default function AdminDashboard({ user }) {
     finally { setLoading(false); }
   };
 
-  const exportCSV = async () => {
+  const exportReport = async () => {
     try {
-      const res = await api.get('/api/admin/export');
-      const rows = [['Team ID', 'Project Title', 'Member Name', 'Register Number', 'Guide', 'Current Review']];
-      res.data.forEach((t, idx) => {
-        const teamCode = `BTECH-IT-${String(idx + 1).padStart(3, '0')}`;
-        const reviewLabel = (t.currentReview || 0) >= 5 ? 'Completed all review' : `${REVIEW_STAGES[t.currentReview || 0]} Review`;
-        const guide = t.guideId?.name || '';
-        // One row per member
-        const members = t.members || [];
-        if (members.length === 0) {
-          rows.push([teamCode, t.projectTitle || '', '', '', guide, reviewLabel]);
-        } else {
-          members.forEach((m, mi) => {
-            rows.push([
-              mi === 0 ? teamCode : '',              // Team ID only on first member row
-              mi === 0 ? (t.projectTitle || '') : '', // Project only on first row
-              m.name || '',
-              m.registerNumber || '',
-              mi === 0 ? guide : '',                 // Guide only on first row
-              mi === 0 ? reviewLabel : '',
-            ]);
-          });
-        }
+      const response = await api.get('/api/admin/export', {
+        responseType: 'blob',
+        params: { _ts: Date.now() },
       });
-      const csv = rows.map(r => r.map(c => `"${(c||'').toString().replace(/"/g,'""')}"`).join(',')).join('\n');
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
-      a.download = 'guide_select_report.csv'; a.click();
-    } catch (e) { alert('Export failed.'); }
+      const blob = new Blob([response.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'review_export.xlsx';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      alert('Export failed.');
+    }
   };
 
   const createUser = async (e) => {
@@ -121,9 +109,9 @@ export default function AdminDashboard({ user }) {
             <h1 className="text-2xl font-black text-gray-900">Admin Dashboard</h1>
             <p className="text-gray-500 text-sm mt-1">HOD — Full system access</p>
           </div>
-          <button onClick={exportCSV}
+          <button onClick={exportReport}
             className="flex items-center gap-2 bg-[#7B1535] hover:bg-[#961a42] text-white font-bold px-4 py-2.5 rounded-xl text-sm transition-all shadow-sm">
-            <Download size={15} /> Export CSV
+            <Download size={15} /> Export Excel
           </button>
         </div>
       </div>

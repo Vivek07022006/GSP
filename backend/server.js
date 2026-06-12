@@ -7,6 +7,7 @@ const bcrypt    = require("bcryptjs");
 const multer    = require("multer");
 const fs        = require("fs");
 const path      = require("path");
+const ExcelJS   = require("exceljs");
 
 const app = express();
 app.use(cors());
@@ -18,6 +19,11 @@ app.use("/photos",  express.static(path.join(__dirname, "Photos")));
 const uploadDir = path.join(__dirname, "uploads");
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir);
+}
+
+const exportsDir = path.join(__dirname, "exports");
+if (!fs.existsSync(exportsDir)) {
+  fs.mkdirSync(exportsDir);
 }
 
 const storage = multer.diskStorage({
@@ -136,6 +142,15 @@ const safeUser = (u) => u ? {
   registerNumber: u.registerNumber, phone: u.phone, specialization: u.specialization,
   maxTeams: u.maxTeams, staffId: u.staffId, photo: photoUrl(u),
 } : null;
+
+const REVIEW_STAGE_LABELS = {
+  0: 'Zeroth Review',
+  1: 'First Review',
+  2: 'Second Review',
+  3: 'Model Review',
+  4: 'Final Review',
+  5: 'Completed all reviews',
+};
 
 // ─────────────────────────────────────────────
 // AUTH ROUTES
@@ -474,8 +489,101 @@ app.get("/api/admin/stats", protect, adminOnly, async (req, res) => {
 
 app.get("/api/admin/export", protect, adminOnly, async (req, res) => {
   try {
-    const teams = await Team.find().populate("members", "-password").populate("guideId", "-password");
-    res.json(teams);
+    const teams = await Team.find().populate("members", "-password").populate("guideId", "-password").lean();
+
+    const reviewGroups = {
+      0: [],
+      1: [],
+      2: [],
+      3: [],
+      4: [],
+    };
+    const singleStudentTeams = [];
+
+    teams.forEach((team) => {
+      const stage = Math.min(Math.max(team.currentReview ?? 0, 0), 4);
+      reviewGroups[stage].push(team);
+      if ((team.members || []).length === 1) {
+        singleStudentTeams.push(team);
+      }
+    });
+
+    // Sort teams by teamId to maintain consistent ordering
+    Object.keys(reviewGroups).forEach((stage) => {
+      reviewGroups[stage].sort((a, b) => (a.teamId || '').localeCompare(b.teamId || ''));
+    });
+    singleStudentTeams.sort((a, b) => (a.teamId || '').localeCompare(b.teamId || ''));
+
+    const workbook = new ExcelJS.Workbook();
+    const workbooks = [
+      { number: 5, label: REVIEW_STAGE_LABELS[0], stage: 0 },
+      { number: 4, label: REVIEW_STAGE_LABELS[1], stage: 1 },
+      { number: 3, label: REVIEW_STAGE_LABELS[2], stage: 2 },
+      { number: 2, label: REVIEW_STAGE_LABELS[3], stage: 3 },
+      { number: 1, label: REVIEW_STAGE_LABELS[4], stage: 4 },
+    ];
+
+    const header = ['Team ID', 'Project Title', 'Member Name', 'Register Number', 'Guide', 'Current Review'];
+
+    workbooks.forEach(({ number, label, stage }) => {
+      const sheet = workbook.addWorksheet(`${number} - ${label}`);
+      sheet.columns = [
+        { header: 'Team ID', key: 'teamId', width: 16 },
+        { header: 'Project Title', key: 'projectTitle', width: 55 },
+        { header: 'Member Name', key: 'memberName', width: 28 },
+        { header: 'Register Number', key: 'registerNumber', width: 18 },
+        { header: 'Guide', key: 'guide', width: 28 },
+        { header: 'Current Review', key: 'currentReview', width: 20 },
+      ];
+      sheet.addRow(header);
+      reviewGroups[stage].forEach((team) => {
+        const guide = team.guideId?.name || '';
+        const reviewLabel = REVIEW_STAGE_LABELS[team.currentReview ?? 0] || '';
+        const members = team.members || [];
+        if (members.length === 0) {
+          sheet.addRow([team.teamId || '', team.projectTitle || '', '', '', guide, reviewLabel]);
+        } else {
+          members.forEach((member) => {
+            sheet.addRow([team.teamId || '', team.projectTitle || '', member.name || '', member.registerNumber || '', guide, reviewLabel]);
+          });
+        }
+      });
+    });
+
+    const singleWorkbook = new ExcelJS.Workbook();
+    const singleSheet = singleWorkbook.addWorksheet('Single Student Teams');
+    singleSheet.columns = [
+      { header: 'Team ID', key: 'teamId', width: 16 },
+      { header: 'Project Title', key: 'projectTitle', width: 55 },
+      { header: 'Member Name', key: 'memberName', width: 28 },
+      { header: 'Register Number', key: 'registerNumber', width: 18 },
+      { header: 'Guide', key: 'guide', width: 28 },
+      { header: 'Current Review', key: 'currentReview', width: 20 },
+    ];
+    singleSheet.addRow(header);
+    singleStudentTeams.forEach((team) => {
+      const guide = team.guideId?.name || '';
+      const reviewLabel = REVIEW_STAGE_LABELS[team.currentReview ?? 0] || '';
+      const member = team.members?.[0] || {};
+      singleSheet.addRow([team.teamId || '', team.projectTitle || '', member.name || '', member.registerNumber || '', guide, reviewLabel]);
+    });
+
+    const reviewExportPath = path.join(exportsDir, 'review_export.xlsx');
+    const singleExportPath = path.join(exportsDir, 'single_student_teams.xlsx');
+    await workbook.xlsx.writeFile(reviewExportPath);
+    await singleWorkbook.xlsx.writeFile(singleExportPath);
+
+    res.set({
+      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+      Pragma: 'no-cache',
+      Expires: '0',
+    });
+    
+    res.download(reviewExportPath, 'review_export.xlsx', (downloadErr) => {
+      if (downloadErr && !res.headersSent) {
+        res.status(500).json({ message: downloadErr.message });
+      }
+    });
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
