@@ -12,7 +12,7 @@ const UserSchema = new mongoose.Schema({
     type: String, 
     lowercase: true, 
     trim: true, 
-    sparse: true, // Allows documents without an email field to exist together
+    sparse: true, 
     unique: true  
   },
   password: { type: String, required: true },
@@ -42,15 +42,15 @@ const facultyList = [
   },
   {
     staffId: '101108', name: 'Ms. Gopika P',
-    email: 'gopika.p.it@gmail.com', phone: '7806998545',
+    email: 'gopika.p.it@sathyabama.ac.in', phone: '7806998545',
     specialization: 'ML',
     photoFile: 'GOPIKA P.jpeg',
   },
   {
-    staffId: '100986', name: 'Hema Prasanna K',
-    email: 'hemaprasanna.s.it@sathyabama.ac.in', phone: '9840331589',
+    staffId: '', name: 'Ms. Arthi D',
+    email: 'arthi.d.it@sathyabama.ac.in', phone: '7358979200',
     specialization: 'AIML',
-    photoFile: 'HEMA PRASANNA KATARI.jpg',
+    photoFile: '',
   },
   {
     staffId: '100444', name: 'Ms. D. Ramalakshmi',
@@ -165,6 +165,22 @@ const facultyList = [
     phone: '9444043846',
     specialization: 'AIML',
     photoFile: 'citations.jpg',
+  },
+  {
+    name: 'Ms. Urmela P',
+    email: 'urmela.p.it@sathyabama.ac.in',
+    staffId: '',
+    phone: '9791958868',
+    specialization: 'AIML',
+    photoFile: '',
+  },
+  {
+    name: 'Mr. Srinivasan',
+    email: 'srinivasansamundiswary@gmail.com',
+    staffId: '',
+    phone: '9969854620',
+    specialization: 'AIML',
+    photoFile: '',
   }
 ];
 
@@ -472,39 +488,57 @@ const studentList = [
 
 const seedData = async () => {
   try {
-    // Drop the users collection completely to clear old, non-sparse indexes
-    try {
-      await mongoose.connection.collections['users'].drop();
-      console.log('🧹 Cleaned existing users collection and old indexes.');
-    } catch (e) {
-      // Collection might not exist yet, safe to ignore
+    console.log('🌱 Creating admin...');
+    
+    // Check for admin duplicates
+    let adminExists = await User.findOne({ email: 'admin@test.com' });
+    if (!adminExists) {
+      await new User({ name: 'Admin', email: 'admin@test.com', password: 'admin123', role: 'admin' }).save();
+      process.stdout.write(`  ✓ Admin\n`);
+    } else {
+      process.stdout.write(`  ⊘ Admin (already exists)\n`);
     }
 
-    console.log('🌱 Creating admin...');
-    await new User({ name: 'Admin', email: 'admin@test.com', password: 'admin123', role: 'admin' }).save();
-    await new User({ name: 'IT HOD', email: 'ithod@sathyabama.ac.in', password: 'admin123', role: 'admin' }).save();
+    let ithodExists = await User.findOne({ email: 'ithod@sathyabama.ac.in' });
+    if (!ithodExists) {
+      await new User({ name: 'IT HOD', email: 'ithod@sathyabama.ac.in', password: 'admin123', role: 'admin' }).save();
+      process.stdout.write(`  ✓ IT HOD\n`);
+    } else {
+      process.stdout.write(`  ⊘ IT HOD (already exists)\n`);
+    }
 
     console.log(`🌱 Creating ${facultyList.length} faculty members...`);
     for (const f of facultyList) {
-      await new User({
-        name: f.name, email: f.email,
-        password: f.phone ,
-        role: 'faculty', phone: f.phone, staffId: f.staffId,
-        specialization: f.specialization, photoFile: f.photoFile, maxTeams: 8,
-      }).save();
-      process.stdout.write(`  ✓ [${f.staffId || 'N/A'}] ${f.name}  →  ${f.photoFile || 'No Photo'}\n`);
+      // Check if faculty already exists by email
+      const exists = await User.findOne({ email: f.email, role: 'faculty' });
+      if (!exists) {
+        await new User({
+          name: f.name, email: f.email,
+          password: f.phone ,
+          role: 'faculty', phone: f.phone, staffId: f.staffId,
+          specialization: f.specialization, photoFile: f.photoFile, maxTeams: 8,
+        }).save();
+        process.stdout.write(`  ✓ [${f.staffId || 'N/A'}] ${f.name}  →  ${f.photoFile || 'No Photo'}\n`);
+      } else {
+        process.stdout.write(`  ⊘ [${f.staffId || 'N/A'}] ${f.name} (already exists)\n`);
+      }
     }
 
     console.log('🌱 Creating students...');
     for (const s of studentList) {
-      // Explicitly leaving email field completely undefined so sparse indexing skips it
-      await new User({
-        name: s.name, 
-        password: s.registerNumber,
-        role: 'student', 
-        registerNumber: s.registerNumber,
-      }).save();
-      process.stdout.write(`  ✓ ${s.name} [${s.registerNumber}]\n`);
+      // Check if student already exists by registerNumber
+      const exists = await User.findOne({ registerNumber: s.registerNumber, role: 'student' });
+      if (!exists) {
+        await new User({
+          name: s.name, 
+          password: s.registerNumber,
+          role: 'student', 
+          registerNumber: s.registerNumber,
+        }).save();
+        process.stdout.write(`  ✓ ${s.name} [${s.registerNumber}]\n`);
+      } else {
+        process.stdout.write(`  ⊘ ${s.name} [${s.registerNumber}] (already exists)\n`);
+      }
     }
 
     console.log('\n🎉 Seeding Complete Successfully!\n');

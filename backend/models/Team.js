@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 
 const teamSchema = new mongoose.Schema(
   {
+    teamId: { type: String, unique: true, sparse: true }, // e.g., "BTECH-IT-001"
     members: [{ type: mongoose.Schema.Types.ObjectId, ref: "User", required: true }],
     guideId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     projectTitle: { type: String },

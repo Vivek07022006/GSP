@@ -37,7 +37,7 @@ router.post('/:id/select-guide', protect, async (req, res) => {
     }
 
     team.guideId = guide.userId; // user reference
-    team.status = 'pending';
+    team.status = 'guide_approved';
     await team.save();
 
     res.json(team);

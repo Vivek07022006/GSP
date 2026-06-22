@@ -170,6 +170,7 @@ export default function StudentDashboard({ user }) {
 
   // Reviews
   const [reviewFile,      setReviewFile]      = useState(null);
+  const [title,           setTitle]           = useState('');
   const [patentStatus,    setPatentStatus]    = useState('');       // Patent | Publication
   const [patentSubStatus, setPatentSubStatus] = useState('');       // Pending | Doing | Applied | Confirmed
   const [patentFile,      setPatentFile]      = useState(null);
@@ -190,7 +191,9 @@ export default function StudentDashboard({ user }) {
 
       if (checkRes.data.team) {
         const revRes = await api.get(`/api/reviews/${checkRes.data.team._id}`);
-        setReviews(revRes.data);
+      setReviews(revRes.data);
+      const currentReviewDoc = revRes.data.find(r => r.reviewStage === (checkRes.data.team.currentReview ?? 0));
+      setTitle(currentReviewDoc?.title || checkRes.data.team.projectTitle || '');
       }
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
@@ -229,17 +232,25 @@ export default function StudentDashboard({ user }) {
   const submitReview = async (e) => {
     e.preventDefault();
     setReviewMsg({ type: '', text: '' });
-    
-    if (!reviewFile) {
-      return setReviewMsg({ type: 'error', text: 'Please upload the required document before submitting.' });
+
+    if (currentStage === 0) {
+      if (!title.trim()) {
+        return setReviewMsg({ type: 'error', text: 'Please enter your project title before submitting.' });
+      }
+    } else {
+      if (!reviewFile) {
+        return setReviewMsg({ type: 'error', text: 'Please upload the required document before submitting.' });
+      }
     }
 
     try {
       const formData = new FormData();
+      if (currentStage === 0) {
+        formData.append('title', title.trim());
+      }
       if (reviewFile)      formData.append('document', reviewFile);
       if (patentStatus)    formData.append('patentStatus', patentStatus);
       if (patentSubStatus) formData.append('patentSubStatus', patentSubStatus);
-      // Only attach proof file when status is Applied or Confirmed
       if (patentFile && ['Applied', 'Confirmed'].includes(patentSubStatus)) {
         formData.append('patentFile', patentFile);
       }
@@ -263,8 +274,10 @@ export default function StudentDashboard({ user }) {
   const progress = currentStage >= 5 ? 100 : Math.max(0, Math.round(((currentStage - 1) / 4) * 100));
 
   const guideSelected = !!(team?.guideId);
-  // Show guide tab if no guide selected OR if the guide rejected (allow re-selection)
-  const needsGuideSelection = !guideSelected || team?.status === 'guide_rejected';
+  const canSubmitReview = !!team && !!team.guideId && team.status !== 'guide_rejected';
+  const needsGuideSelection = !guideSelected;
+  const guideRejected = team?.status === 'guide_rejected';
+  const showReviewSection = team && (team.status === 'guide_approved' || (team.status === 'pending' && currentStage === 0 && team.guideId));
 
   // Find the exact document for the currently active stage
   const currentReviewDoc = reviews.find(r => r.reviewStage === currentStage);
@@ -585,12 +598,17 @@ export default function StudentDashboard({ user }) {
             {!team && (
               <GlassCard className="p-6 text-center text-gray-500 text-sm">Create a team first to submit reviews.</GlassCard>
             )}
-            {team && team.status !== 'guide_approved' && (
+            {team && needsGuideSelection && (
               <GlassCard className="p-6">
-                <p className="text-orange-600 text-sm text-center">Your guide must approve your team before you can submit reviews.</p>
+                <p className="text-orange-600 text-sm text-center">Please select a guide first before submitting your title.</p>
               </GlassCard>
             )}
-            {team && team.status === 'guide_approved' && (
+            {team && guideRejected && (
+              <GlassCard className="p-6">
+                <p className="text-red-600 text-sm text-center">Your selected guide rejected the title. Please choose another guide.</p>
+              </GlassCard>
+            )}
+            {team && showReviewSection && (
               <>
                 <GlassCard className="p-6">
                   <h3 className="text-gray-900 font-bold mb-4">Submit Review</h3>
@@ -602,7 +620,7 @@ export default function StudentDashboard({ user }) {
                       <p className="font-bold">All Reviews Completed!</p>
                       <p className="text-xs text-gray-500 mt-1">Your team has successfully cleared all stages.</p>
                     </div>
-                  ) : currentStage > 0 ? (
+                  ) : currentStage >= 0 ? (
                     isWaitingOnGuide ? (
                       <div className="text-center py-6 bg-yellow-50 border border-yellow-200 rounded-xl">
                         <AlertCircle size={28} className="text-yellow-600 mx-auto mb-3" />
@@ -632,90 +650,100 @@ export default function StudentDashboard({ user }) {
                           </div>
                         )}
 
-                      {/* Always show main document upload */}
-                      <div>
-                        <label className={labelCls}>
-                          Upload Document {(currentStage === 1 || currentStage === 2) ? '(PPT)' : '(PDF, DOC)'}
-                        </label>
-                        <div className="border-2 border-dashed border-gray-200 rounded-xl p-6 text-center hover:border-[#7B1535]/60 transition-colors">
-                          <FileText size={22} className="mx-auto text-gray-300 mb-2" />
-                          <input type="file" onChange={e => setReviewFile(e.target.files[0])}
-                            accept=".pdf,.ppt,.pptx,.doc,.docx" className="hidden" id="rev-file" />
-                          <label htmlFor="rev-file" className="cursor-pointer text-sm text-[#7B1535] hover:text-gray-900 transition-colors">
-                            {reviewFile ? reviewFile.name : 'Click to choose file'}
-                          </label>
-                        </div>
-                      </div>
-
-                      {/* Stage 1 & 2: Patent / Publication section */}
-                      {(currentStage === 1 || currentStage === 2) && (
-                        <div className="space-y-4 border-t border-gray-100 pt-4 mt-2">
-                          {/* Step 2: Type */}
+                        {currentStage === 0 ? (
                           <div>
-                            <label className={labelCls}>Project Type <span className="text-red-500">*</span></label>
-                            <div className="relative">
-                              <select
-                                value={patentStatus}
-                                onChange={e => { setPatentStatus(e.target.value); setPatentSubStatus(''); setPatentFile(null); }}
-                                className={inputCls}
-                              >
-                                <option value="">-- Select type --</option>
-                                <option value="Patent">Patent</option>
-                                <option value="Publication">Publication (Journal)</option>
-                              </select>
-                              <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                            </div>
+                            <label className={labelCls}>Project Title *</label>
+                            <input
+                              value={title}
+                              onChange={e => setTitle(e.target.value)}
+                              required
+                              className={inputCls}
+                              placeholder="Enter your project title"
+                            />
+                            <p className="text-gray-400 text-xs mt-1">This title will be sent to your guide for approval.</p>
                           </div>
-
-                          {/* Step 3: Status — only shown after type is chosen */}
-                          {patentStatus && (
-                            <div>
-                              <label className={labelCls}>{patentStatus} Status <span className="text-red-500">*</span></label>
-                              <div className="relative">
-                                <select
-                                  value={patentSubStatus}
-                                  onChange={e => { setPatentSubStatus(e.target.value); setPatentFile(null); }}
-                                  className={inputCls}
-                                >
-                                  <option value="">-- Select status --</option>
-                                  <option value="Pending">Pending</option>
-                                  <option value="Doing">Doing</option>
-                                  <option value="Applied">Applied</option>
-                                  <option value="Confirmed">Confirmed</option>
-                                </select>
-                                <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Step 4: Upload proof — only for Applied or Confirmed */}
-                          {(patentSubStatus === 'Applied' || patentSubStatus === 'Confirmed') && (
+                        ) : (
+                          <>
                             <div>
                               <label className={labelCls}>
-                                Upload {patentSubStatus === 'Applied' ? 'Applied Mail / Attachment' : 'Confirmation Letter / Mail'}
-                                <span className="text-red-500"> *</span>
+                                Upload Document {(currentStage === 1 || currentStage === 2) ? '(PPT)' : '(PDF, DOC)'}
                               </label>
-                              <div className="border-2 border-dashed border-gray-200 bg-gray-50 rounded-xl py-5 text-center hover:border-[#7B1535]/40 transition-colors">
-                                <input type="file" onChange={e => setPatentFile(e.target.files[0])}
-                                  accept=".pdf,image/*" className="hidden" id="patent-file" />
-                                <label htmlFor="patent-file" className="cursor-pointer text-xs text-[#7B1535] hover:text-gray-900 transition-colors">
-                                  {patentFile
-                                    ? <span className="text-green-600 font-semibold">✅ {patentFile.name}</span>
-                                    : `Click to upload ${patentSubStatus.toLowerCase()} proof`}
+                              <div className="border-2 border-dashed border-gray-200 rounded-xl p-6 text-center hover:border-[#7B1535]/60 transition-colors">
+                                <FileText size={22} className="mx-auto text-gray-300 mb-2" />
+                                <input type="file" onChange={e => setReviewFile(e.target.files[0])}
+                                  accept=".pdf,.ppt,.pptx,.doc,.docx" className="hidden" id="rev-file" />
+                                <label htmlFor="rev-file" className="cursor-pointer text-sm text-[#7B1535] hover:text-gray-900 transition-colors">
+                                  {reviewFile ? reviewFile.name : 'Click to choose file'}
                                 </label>
                               </div>
                             </div>
-                          )}
-                        </div>
-                      )}
+
+                            {(currentStage === 1 || currentStage === 2) && (
+                              <div className="space-y-4 border-t border-gray-100 pt-4 mt-2">
+                                <div>
+                                  <label className={labelCls}>Project Type <span className="text-red-500">*</span></label>
+                                  <div className="relative">
+                                    <select
+                                      value={patentStatus}
+                                      onChange={e => { setPatentStatus(e.target.value); setPatentSubStatus(''); setPatentFile(null); }}
+                                      className={inputCls}
+                                    >
+                                      <option value="">-- Select type --</option>
+                                      <option value="Patent">Patent</option>
+                                      <option value="Publication">Publication (Journal)</option>
+                                    </select>
+                                    <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                                  </div>
+                                </div>
+
+                                {patentStatus && (
+                                  <div>
+                                    <label className={labelCls}>{patentStatus} Status <span className="text-red-500">*</span></label>
+                                    <div className="relative">
+                                      <select
+                                        value={patentSubStatus}
+                                        onChange={e => { setPatentSubStatus(e.target.value); setPatentFile(null); }}
+                                        className={inputCls}
+                                      >
+                                        <option value="">-- Select status --</option>
+                                        <option value="Pending">Pending</option>
+                                        <option value="Doing">Doing</option>
+                                        <option value="Applied">Applied</option>
+                                        <option value="Confirmed">Confirmed</option>
+                                      </select>
+                                      <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                                    </div>
+                                  </div>
+                                )}
+
+                                {(patentSubStatus === 'Applied' || patentSubStatus === 'Confirmed') && (
+                                  <div>
+                                    <label className={labelCls}>
+                                      Upload {patentSubStatus === 'Applied' ? 'Applied Mail / Attachment' : 'Confirmation Letter / Mail'}
+                                      <span className="text-red-500"> *</span>
+                                    </label>
+                                    <div className="border-2 border-dashed border-gray-200 bg-gray-50 rounded-xl py-5 text-center hover:border-[#7B1535]/40 transition-colors">
+                                      <input type="file" onChange={e => setPatentFile(e.target.files[0])}
+                                        accept=".pdf,image/*" className="hidden" id="patent-file" />
+                                      <label htmlFor="patent-file" className="cursor-pointer text-xs text-[#7B1535] hover:text-gray-900 transition-colors">
+                                        {patentFile
+                                          ? <span className="text-green-600 font-semibold">✅ {patentFile.name}</span>
+                                          : `Click to upload ${patentSubStatus.toLowerCase()} proof`}
+                                      </label>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </>
+                        )}
 
                       <button type="submit"
                         className="w-full bg-[#7B1535] hover:bg-[#961a42] text-white font-bold py-2.5 rounded-xl transition-all text-sm mt-3">
                         Submit Review
                       </button>
                     </form>
-                    )
-                  ) : (
+                  )) : (
                     <div className="text-center py-4 bg-gray-50 border border-gray-200 rounded-xl text-gray-400 text-sm">
                       Awaiting initial setup.
                     </div>

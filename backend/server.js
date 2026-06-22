@@ -85,10 +85,11 @@ const CommentSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 const TeamSchema = new mongoose.Schema({
+  teamId:        { type: String, unique: true, sparse: true },
   projectTitle:  { type: String, default: "" },
   members:       [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
   guideId:       { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
-  status:        { type: String, enum: ["pending", "guide_approved"], default: "pending" },
+  status:        { type: String, enum: ["pending", "guide_approved", "guide_rejected"], default: "pending" },
   currentReview: { type: Number, default: 0 },   // 0=Zeroth … 4=Final
 }, { timestamps: true });
 
@@ -97,7 +98,8 @@ const Team = mongoose.model("Team", TeamSchema);
 // ── Review ──
 const ReviewSchema = new mongoose.Schema({
   teamId:        { type: mongoose.Schema.Types.ObjectId, ref: "Team", required: true },
-  reviewStage:   { type: Number, required: true, min: 1, max: 4 },  // Stage 0 = guide selection (not submittable)
+  reviewStage:   { type: Number, required: true, min: 0, max: 4 },
+  title:         { type: String, default: "" },
   submissionFile:{ type: String, default: "" },   // general doc (stage 3 & 4)
   pptFileName:   { type: String, default: "" },   // stage 1 & 2
   patentStatus:  { type: String, enum: ["", "Patent", "Publication"], default: "" },
@@ -142,6 +144,91 @@ const safeUser = (u) => u ? {
   registerNumber: u.registerNumber, phone: u.phone, specialization: u.specialization,
   maxTeams: u.maxTeams, staffId: u.staffId, photo: photoUrl(u),
 } : null;
+
+const SECTION_RANGES = [
+  { key: 'A1', ranges: [[43120001, 43120062], [43120307, 43120307]] },
+  { key: 'A2', ranges: [[43120063, 43120122], [43120702, 43120702], [43120705, 43120705]] },
+  { key: 'A3', ranges: [[43120123, 43120184], [43120308, 43120308]] },
+  { key: 'A4', ranges: [[43120185, 43120244], [43120701, 43120701], [43120703, 43120703], [43120704, 43120704]] },
+  { key: 'A5', ranges: [[43120245, 43120306]] },
+];
+
+const findSectionByRegister = (registerNumber) => {
+  if (!registerNumber) return null;
+  const digits = registerNumber.toString().trim();
+  if (!/^[0-9]+$/.test(digits)) return null;
+  const value = parseInt(digits, 10);
+  const section = SECTION_RANGES.find(({ ranges }) =>
+    ranges.some(([min, max]) => value >= min && value <= max)
+  );
+  return section?.key || null;
+};
+
+const formatTeamId = (index) => `BTECH-IT-${String(index + 1).padStart(3, '0')}`;
+
+const generateNextTeamId = async () => {
+  const teams = await Team.find({ teamId: { $regex: /^BTECH-IT-\d{3}$/ } }).lean();
+  let maxIndex = 0;
+  teams.forEach((team) => {
+    const match = (team.teamId || '').match(/BTECH-IT-(\d{3})$/);
+    if (match) {
+      const idx = parseInt(match[1], 10);
+      if (!Number.isNaN(idx) && idx > maxIndex) {
+        maxIndex = idx;
+      }
+    }
+  });
+  return formatTeamId(maxIndex + 1);
+};
+
+const buildSectionTeams = (teams) => {
+  const sectionTeams = SECTION_RANGES.reduce((carry, section) => {
+    carry[section.key] = [];
+    return carry;
+  }, {});
+  const unknownTeams = [];
+
+  teams.forEach((team) => {
+    const members = (team.members || [])
+      .map((member) => ({
+        name: member?.name || '',
+        registerNumber: member?.registerNumber || '',
+        numericRegister: parseInt((member?.registerNumber || '').replace(/[^0-9]/g, ''), 10) || Number.MAX_SAFE_INTEGER,
+      }))
+      .sort((a, b) => a.numericRegister - b.numericRegister);
+
+    const firstMember = members[0];
+    const sectionKey = firstMember ? findSectionByRegister(firstMember.registerNumber) : null;
+    const teamData = {
+      team,
+      section: sectionKey || 'Unknown',
+      members,
+      minRegister: firstMember?.numericRegister || Number.MAX_SAFE_INTEGER,
+    };
+
+    if (sectionKey && sectionTeams[sectionKey]) {
+      sectionTeams[sectionKey].push(teamData);
+    } else {
+      unknownTeams.push(teamData);
+    }
+  });
+
+  Object.keys(sectionTeams).forEach((sectionKey) => {
+    sectionTeams[sectionKey].sort((a, b) => a.minRegister - b.minRegister);
+  });
+  if (unknownTeams.length) {
+    unknownTeams.sort((a, b) => a.minRegister - b.minRegister);
+    sectionTeams.Unknown = unknownTeams;
+  }
+
+  return sectionTeams;
+};
+
+const flattenSectionOrderedTeams = (teams) => {
+  const sectionTeams = buildSectionTeams(teams);
+  const sectionOrder = SECTION_RANGES.map((section) => section.key).concat(['Unknown']);
+  return sectionOrder.flatMap((sectionKey) => (sectionTeams[sectionKey] || []).map((row) => row.team));
+};
 
 const REVIEW_STAGE_LABELS = {
   0: 'Zeroth Review',
@@ -272,7 +359,8 @@ app.post("/api/teams", protect, async (req, res) => {
       members.push(member2._id);
     }
 
-    const team = await Team.create({ members, projectTitle: projectTitle?.trim() || "" });
+    const teamId = await generateNextTeamId();
+    const team = await Team.create({ members, projectTitle: projectTitle?.trim() || "", teamId });
     const populated = await team.populate([{ path: "members", select: "-password" }, { path: "guideId", select: "-password" }]);
     res.status(201).json(populated);
   } catch (err) { res.status(500).json({ message: err.message }); }
@@ -293,9 +381,6 @@ app.post("/api/teams/:id/select-guide", protect, async (req, res) => {
 
     const cap = Math.min(guide.maxTeams || MAX_TEAMS, MAX_TEAMS);
 
-    // ── Atomic slot check-and-assign ──────────────────────────────────────
-    // Only increment if count is still below cap — prevents race conditions
-    // We use aggregation to count and update in one atomic step via a session
     const session = await mongoose.startSession();
     let populated;
     try {
@@ -304,9 +389,8 @@ app.post("/api/teams/:id/select-guide", protect, async (req, res) => {
         if (currentCount >= cap) {
           throw { _isSlotFull: true, cap };
         }
-        team.guideId       = guideId;
-        team.status        = "guide_approved";
-        team.currentReview = 1;
+        team.guideId = guideId;
+        team.status = "guide_approved";
         await team.save({ session });
       });
       populated = await Team.findById(team._id)
@@ -359,8 +443,8 @@ app.post("/api/guides/team/:teamId/status", protect, async (req, res) => {
       return res.status(403).json({ message: "Not your team" });
 
     team.status = status;
-    if (status === "guide_approved" && team.currentReview === 0) {
-      team.currentReview = 1; // unlock First review
+    if (status === "guide_rejected") {
+      team.currentReview = 0;
     }
     await team.save();
 
@@ -382,19 +466,28 @@ app.get("/api/reviews/:teamId", protect, async (req, res) => {
 
 app.post("/api/reviews/:teamId/submit", protect, upload.fields([{ name: 'document', maxCount: 1 }, { name: 'patentFile', maxCount: 1 }]), async (req, res) => {
   try {
-    const { patentStatus, patentSubStatus } = req.body;
+    const { title, patentStatus, patentSubStatus } = req.body;
     const team  = await Team.findById(req.params.teamId);
     if (!team) return res.status(404).json({ message: "Team not found" });
 
     const stage = team.currentReview;
-    if (stage < 1 || stage > 4)
+    if (stage < 0 || stage > 4)
       return res.status(400).json({ message: "No review stage currently open for submission." });
+
+    if (stage === 0 && !title?.trim()) {
+      return res.status(400).json({ message: "Please provide the project title for Zeroth Review." });
+    }
 
     let review = await Review.findOne({ teamId: team._id, reviewStage: stage });
     if (!review) review = new Review({ teamId: team._id, reviewStage: stage });
 
     review.status      = "pending";
     review.submittedAt = new Date();
+    if (stage === 0) {
+      review.title = title.trim();
+      team.projectTitle = title.trim();
+      await team.save();
+    }
     if (patentStatus    !== undefined) review.patentStatus    = patentStatus;
     if (patentSubStatus !== undefined) review.patentSubStatus = patentSubStatus;
 
@@ -449,12 +542,15 @@ app.post("/api/reviews/:teamId/stage-feedback", protect, async (req, res) => {
     if (!team) return res.status(404).json({ message: "Team not found" });
 
     const stageNum = team.currentReview;
-    if (stageNum < 1 || stageNum > 4) 
+    if (stageNum < 0 || stageNum > 4) 
       return res.status(400).json({ message: "No active review stage to evaluate." });
 
-    // ⛔ BLOCK: student must submit first before faculty can comment/approve
     const review = await Review.findOne({ teamId: team._id, reviewStage: stageNum });
-    if (!review || (!review.submissionFile && !review.pptFileName)) {
+    if (!review) {
+      return res.status(400).json({ message: "Student has not submitted the current review stage yet. Please wait for the student to submit." });
+    }
+
+    if (stageNum >= 1 && !review.submissionFile && !review.pptFileName) {
       return res.status(400).json({ message: "Student has not submitted any files for this review stage yet. Please wait for the student to submit." });
     }
 
@@ -462,6 +558,9 @@ app.post("/api/reviews/:teamId/stage-feedback", protect, async (req, res) => {
     if (status) {
       review.status = status;
       if (status === "approved") {
+        if (stageNum === 0) {
+          team.status = "guide_approved";
+        }
         team.currentReview = Math.min(stageNum + 1, 5); // 5 means all done
         await team.save();
       }
@@ -585,6 +684,143 @@ app.get("/api/admin/export", protect, adminOnly, async (req, res) => {
       }
     });
   } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+app.get("/api/admin/export/sections", protect, adminOnly, async (req, res) => {
+  try {
+    const teams = await Team.find().populate('members', '-password').populate('guideId', '-password').lean();
+    const sectionTeams = buildSectionTeams(teams);
+
+    const workbook = new ExcelJS.Workbook();
+    const sectionKeys = SECTION_RANGES.map((section) => section.key);
+
+    let globalTeamIndex = 0;
+    sectionKeys.forEach((sectionKey) => {
+      const rows = sectionTeams[sectionKey] || [];
+      const sheet = workbook.addWorksheet(sectionKey);
+      sheet.columns = [
+        { header: 'Team ID', key: 'teamId', width: 18 },
+        { header: 'Section', key: 'section', width: 10 },
+        { header: 'Project Title', key: 'projectTitle', width: 40 },
+        { header: 'Member Name', key: 'memberName', width: 28 },
+        { header: 'Register Number', key: 'registerNumber', width: 18 },
+        { header: 'Guide', key: 'guide', width: 28 },
+      ];
+      sheet.addRow(['Team ID', 'Section', 'Project Title', 'Member Name', 'Register Number', 'Guide']);
+
+      rows.forEach((teamData) => {
+        const teamId = teamData.team.teamId || formatTeamId(globalTeamIndex);
+        globalTeamIndex += 1;
+        const guideName = teamData.team.guideId?.name || '';
+        const projectTitle = teamData.team.projectTitle || '';
+
+        if (teamData.members.length === 0) {
+          sheet.addRow([teamId, sectionKey, projectTitle, '', '', guideName]);
+          return;
+        }
+
+        teamData.members.forEach((member) => {
+          sheet.addRow([
+            teamId,
+            sectionKey,
+            projectTitle,
+            member.name || '',
+            member.registerNumber || '',
+            guideName,
+          ]);
+        });
+      });
+    });
+
+    if (sectionTeams.Unknown) {
+      const unknownSheet = workbook.addWorksheet('Unknown');
+      unknownSheet.columns = [
+        { header: 'Team ID', key: 'teamId', width: 18 },
+        { header: 'Section', key: 'section', width: 10 },
+        { header: 'Project Title', key: 'projectTitle', width: 40 },
+        { header: 'Member Name', key: 'memberName', width: 28 },
+        { header: 'Register Number', key: 'registerNumber', width: 18 },
+        { header: 'Guide', key: 'guide', width: 28 },
+      ];
+      unknownSheet.addRow(['Team ID', 'Section', 'Project Title', 'Member Name', 'Register Number', 'Guide']);
+      sectionTeams.Unknown.forEach((teamData) => {
+        const teamId = teamData.team.teamId || formatTeamId(globalTeamIndex);
+        globalTeamIndex += 1;
+        const guideName = teamData.team.guideId?.name || '';
+        const projectTitle = teamData.team.projectTitle || '';
+        teamData.members.forEach((member) => {
+          unknownSheet.addRow([
+            teamId,
+            'Unknown',
+            projectTitle,
+            member.name || '',
+            member.registerNumber || '',
+            guideName,
+          ]);
+        });
+      });
+    }
+
+    const exportPath = path.join(exportsDir, 'class_section_teams.xlsx');
+    await workbook.xlsx.writeFile(exportPath);
+
+    res.set({
+      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+      Pragma: 'no-cache',
+      Expires: '0',
+    });
+
+    res.download(exportPath, 'class_section_teams.xlsx', (downloadErr) => {
+      if (downloadErr && !res.headersSent) {
+        res.status(500).json({ message: downloadErr.message });
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+app.post("/api/admin/fix-team-ids", protect, adminOnly, async (req, res) => {
+  try {
+    const teams = await Team.find()
+      .populate('members', 'registerNumber name')
+      .populate('guideId', 'name')
+      .lean();
+
+    const orderedTeams = flattenSectionOrderedTeams(teams);
+    const updates = orderedTeams.map((team, index) => {
+      const teamId = formatTeamId(index);
+      return {
+        updateOne: {
+          filter: { _id: team._id },
+          update: { $set: { teamId } },
+        },
+      };
+    });
+
+    if (updates.length > 0) {
+      await Team.bulkWrite(updates);
+    }
+    res.json({ message: `Assigned ${updates.length} teams canonical IDs in section order.` });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+app.post("/api/admin/reset-title-review", protect, adminOnly, async (req, res) => {
+  try {
+    await Review.deleteMany({});
+    await Team.updateMany({}, {
+      $set: {
+        projectTitle: "",
+        currentReview: 0,
+        status: "pending",
+      },
+    });
+    res.json({ message: "Cleared all titles and reset every team to Zeroth Review." });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
 });
 
 // Delete user (admin only)

@@ -38,10 +38,8 @@ export default function TeamReviewFaculty({ user }) {
     try {
       const res = await api.get('/api/teams');
       const found = res.data.find(t => t._id === teamId);
-      if (found) setTeam(found);
-      
-      // Fetch reviews
-      if (found && found.status === 'guide_approved') {
+      if (found) {
+        setTeam(found);
         const revs = await api.get(`/api/reviews/${found._id}`);
         setReviews(revs.data);
       }
@@ -139,10 +137,10 @@ export default function TeamReviewFaculty({ user }) {
           </GlassCard>
           <div className="space-y-4">
 
-            {team.status === 'guide_approved' && team.currentReview >= 1 && team.currentReview <= 4 && (() => {
+            {(team.currentReview === 0 || (team.status === 'guide_approved' && team.currentReview >= 1 && team.currentReview <= 4)) && (() => {
               // Find if student has submitted for the current stage
               const currentReviewDoc = reviews.find(r => r.reviewStage === team.currentReview);
-              const hasSubmission = currentReviewDoc && (currentReviewDoc.pptFileName || currentReviewDoc.submissionFile);
+              const hasSubmission = currentReviewDoc && (team.currentReview === 0 ? currentReviewDoc.title?.trim() : (currentReviewDoc.pptFileName || currentReviewDoc.submissionFile));
 
               if (!hasSubmission) {
                 return (
@@ -246,14 +244,19 @@ export default function TeamReviewFaculty({ user }) {
                   
                   <div className="space-y-2 mb-4 bg-white p-3 rounded-lg border border-gray-100">
                     <p className="text-xs font-bold text-gray-500 uppercase tracking-widest border-b border-gray-100 pb-1 mb-2">Submitted Files</p>
+                    {r.title && (
+                      <p className="text-sm text-gray-700 flex items-center gap-2">
+                        📝 Title: <span className="text-[#7B1535] font-bold">{r.title}</span>
+                      </p>
+                    )}
                     {r.submissionFile && (
                       <p className="text-sm text-gray-700 flex items-center gap-2">
-                        📄 Doc: <a href="#" onClick={(e) => handleDownload(e, r.submissionFile)} className="text-[#7B1535] hover:text-[#5a0f27] font-bold underline underline-offset-2 flex items-center gap-1">{r.submissionFile} <Download size={14}/></a>
+                        📄 Doc: <a href="#" onClick={(e) => handleDownload(e, r.submissionFile)} className="text-[#7B1535] font-semibold underline underline-offset-2 flex items-center gap-1">{r.submissionFile} <Download size={14}/></a>
                       </p>
                     )}
                     {r.pptFileName && (
                       <p className="text-sm text-gray-700 flex items-center gap-2">
-                        📊 PPT: <a href="#" onClick={(e) => handleDownload(e, r.pptFileName)} className="text-[#7B1535] hover:text-[#5a0f27] font-bold underline underline-offset-2 flex items-center gap-1">{r.pptFileName} <Download size={14}/></a>
+                        📊 PPT: <a href="#" onClick={(e) => handleDownload(e, r.pptFileName)} className="text-[#7B1535] font-semibold underline underline-offset-2 flex items-center gap-1">{r.pptFileName} <Download size={14}/></a>
                       </p>
                     )}
                     {r.patentStatus && (
@@ -264,7 +267,7 @@ export default function TeamReviewFaculty({ user }) {
                         )}
                       </div>
                     )}
-                    {!r.submissionFile && !r.pptFileName && !r.patentStatus && (
+                    {!r.title && !r.submissionFile && !r.pptFileName && !r.patentStatus && (
                       <p className="text-xs text-gray-400 italic">No files attached.</p>
                     )}
                   </div>
