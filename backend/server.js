@@ -55,7 +55,7 @@ const JWT_SECRET = process.env.JWT_SECRET || "supersecret123";
 // ─────────────────────────────────────────────
 const UserSchema = new mongoose.Schema({
   name:           { type: String, required: true, trim: true },
-  email:          { type: String, required: true, unique: true, lowercase: true, trim: true },
+  email:          { type: String, unique: true, lowercase: true, trim: true, sparse: true },
   password:       { type: String, required: true },
   role:           { type: String, enum: ["student", "faculty", "admin"], default: "student" },
   registerNumber: { type: String, default: "", trim: true },
@@ -66,15 +66,6 @@ const UserSchema = new mongoose.Schema({
   maxTeams:       { type: Number, default: 10 },   // only for faculty
 }, { timestamps: true });
 
-// Hash password before save
-UserSchema.pre("save", async function() {
-  if (!this.isModified("password")) return;
-  this.password = await bcrypt.hash(this.password, 10);
-});
-
-UserSchema.methods.matchPassword = function(plain) {
-  return bcrypt.compare(plain, this.password);
-};
 
 const User = mongoose.model("User", UserSchema);
 
@@ -100,6 +91,7 @@ const ReviewSchema = new mongoose.Schema({
   teamId:        { type: mongoose.Schema.Types.ObjectId, ref: "Team", required: true },
   reviewStage:   { type: Number, required: true, min: 0, max: 4 },
   title:         { type: String, default: "" },
+  abstract:      { type: String, default: "" },
   submissionFile:{ type: String, default: "" },   // general doc (stage 3 & 4)
   pptFileName:   { type: String, default: "" },   // stage 1 & 2
   patentStatus:  { type: String, enum: ["", "Patent", "Publication"], default: "" },
@@ -256,7 +248,17 @@ app.post("/api/auth/login", async (req, res) => {
       user = await User.findOne({ email: email.trim().toLowerCase() });
     }
 
-    if (!user || !(await user.matchPassword(password)))
+    let passwordValid = false;
+    if (!user) {
+      return res.status(401).json({ message: "Invalid credentials. Please check your details." });
+    }
+    const stored = user.password || '';
+    if (stored.startsWith('$2a$') || stored.startsWith('$2b$')) {
+      passwordValid = await bcrypt.compare(password, stored);
+    } else {
+      passwordValid = stored === password;
+    }
+    if (!passwordValid)
       return res.status(401).json({ message: "Invalid credentials. Please check your details." });
 
     res.json({
@@ -270,6 +272,73 @@ app.post("/api/auth/login", async (req, res) => {
       token: makeToken(user)
     });
   } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+app.post("/api/auth/change-password", protect, async (req, res) => {
+  try {
+    const { oldPassword, newPassword, registerNumber, email } = req.body;
+
+    if (!oldPassword || !newPassword) {
+      return res.status(400).json({ message: "Old password and new password are required." });
+    }
+
+    if (newPassword.length < 4) {
+      return res.status(400).json({ message: "New password must be at least 4 characters." });
+    }
+
+    let user = null;
+    const role = (req.user.role || '').toLowerCase();
+
+    if (role === 'student') {
+      if (!registerNumber) {
+        return res.status(400).json({ message: "Register number is required for students." });
+      }
+      console.log('[change-password] Student lookup:', { registerNumber: registerNumber.trim(), role: 'student' });
+      user = await User.findOne({ registerNumber: registerNumber.trim(), role: 'student' });
+      console.log('[change-password] Student lookup result:', user ? { _id: user._id, name: user.name, registerNumber: user.registerNumber } : 'NOT FOUND');
+    } else {
+      if (!email) {
+        return res.status(400).json({ message: "Email is required for faculty." });
+      }
+      console.log('[change-password] Faculty lookup:', { email: email.trim().toLowerCase() });
+      user = await User.findOne({ email: email.trim().toLowerCase() });
+      console.log('[change-password] Faculty lookup result:', user ? { _id: user._id, name: user.name, email: user.email } : 'NOT FOUND');
+    }
+
+    if (!user) {
+      console.log('[change-password] USER NOT FOUND - check JWT role and lookup values');
+      return res.status(404).json({ message: "User not found. Check console for details." });
+    }
+
+    const stored = user.password || '';
+    const passwordPrefix = stored.substring(0, 4);
+    console.log('[change-password] Password check:', { prefix: passwordPrefix, isHashed: passwordPrefix === '$2a$' || passwordPrefix === '$2b$' });
+
+    let oldPasswordValid = false;
+    if (passwordPrefix === '$2a$' || passwordPrefix === '$2b$') {
+      console.log('[change-password] Comparing with bcrypt...');
+      oldPasswordValid = await bcrypt.compare(oldPassword, stored);
+      console.log('[change-password] bcrypt result:', oldPasswordValid);
+    } else {
+      console.log('[change-password] Comparing plaintext...');
+      oldPasswordValid = stored === oldPassword;
+      console.log('[change-password] plaintext result:', oldPasswordValid);
+    }
+
+    if (!oldPasswordValid) {
+      console.log('[change-password] OLD PASSWORD MISMATCH');
+      return res.status(401).json({ message: "Old password is incorrect." });
+    }
+
+    user.password = newPassword;
+    await user.save();
+
+    console.log('[change-password] SUCCESS');
+    res.json({ message: "Password changed successfully." });
+  } catch (err) {
+    console.error('[change-password] ERROR:', err);
     res.status(500).json({ message: err.message });
   }
 });
@@ -466,7 +535,7 @@ app.get("/api/reviews/:teamId", protect, async (req, res) => {
 
 app.post("/api/reviews/:teamId/submit", protect, upload.fields([{ name: 'document', maxCount: 1 }, { name: 'patentFile', maxCount: 1 }]), async (req, res) => {
   try {
-    const { title, patentStatus, patentSubStatus } = req.body;
+    const { title, abstract, patentStatus, patentSubStatus } = req.body;
     const team  = await Team.findById(req.params.teamId);
     if (!team) return res.status(404).json({ message: "Team not found" });
 
@@ -485,6 +554,7 @@ app.post("/api/reviews/:teamId/submit", protect, upload.fields([{ name: 'documen
     review.submittedAt = new Date();
     if (stage === 0) {
       review.title = title.trim();
+      review.abstract = abstract?.trim() || '';
       team.projectTitle = title.trim();
       await team.save();
     }

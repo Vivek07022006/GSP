@@ -1,6 +1,5 @@
 require('dotenv').config();
 const mongoose = require('mongoose');
-const bcrypt = require('bcryptjs');
 
 mongoose.connect(process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/guide_portal_demo')
   .then(() => console.log('✅ DB Connected for Seeding'))
@@ -24,11 +23,6 @@ const UserSchema = new mongoose.Schema({
   photoFile: { type: String, default: '' }, 
   maxTeams: { type: Number, default: 8 },
 }, { timestamps: true });
-
-UserSchema.pre('save', async function () {
-  if (!this.isModified('password')) return;
-  this.password = await bcrypt.hash(this.password, 10);
-});
 
 const User = mongoose.model('User', UserSchema);
 

@@ -118,6 +118,8 @@ export default function AdminDashboard({ user }) {
 
       <div className="max-w-6xl mx-auto px-6 py-8 space-y-6">
 
+
+
         {/* Stat cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[

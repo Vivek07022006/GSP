@@ -171,6 +171,7 @@ export default function StudentDashboard({ user }) {
   // Reviews
   const [reviewFile,      setReviewFile]      = useState(null);
   const [title,           setTitle]           = useState('');
+  const [abstract,        setAbstract]        = useState('');
   const [patentStatus,    setPatentStatus]    = useState('');       // Patent | Publication
   const [patentSubStatus, setPatentSubStatus] = useState('');       // Pending | Doing | Applied | Confirmed
   const [patentFile,      setPatentFile]      = useState(null);
@@ -194,6 +195,7 @@ export default function StudentDashboard({ user }) {
       setReviews(revRes.data);
       const currentReviewDoc = revRes.data.find(r => r.reviewStage === (checkRes.data.team.currentReview ?? 0));
       setTitle(currentReviewDoc?.title || checkRes.data.team.projectTitle || '');
+      setAbstract(currentReviewDoc?.abstract || '');
       }
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
@@ -237,6 +239,9 @@ export default function StudentDashboard({ user }) {
       if (!title.trim()) {
         return setReviewMsg({ type: 'error', text: 'Please enter your project title before submitting.' });
       }
+      if (!abstract.trim()) {
+        return setReviewMsg({ type: 'error', text: 'Please enter your project abstract before submitting.' });
+      }
     } else {
       if (!reviewFile) {
         return setReviewMsg({ type: 'error', text: 'Please upload the required document before submitting.' });
@@ -247,6 +252,7 @@ export default function StudentDashboard({ user }) {
       const formData = new FormData();
       if (currentStage === 0) {
         formData.append('title', title.trim());
+        formData.append('abstract', abstract.trim());
       }
       if (reviewFile)      formData.append('document', reviewFile);
       if (patentStatus)    formData.append('patentStatus', patentStatus);
@@ -260,6 +266,8 @@ export default function StudentDashboard({ user }) {
       });
       setReviewMsg({ type: 'success', text: `${REVIEW_STAGES[currentStage]} Review submitted! Awaiting guide feedback.` });
       setReviewFile(null);
+      setTitle('');
+      setAbstract('');
       setPatentStatus('');
       setPatentSubStatus('');
       setPatentFile(null);
@@ -651,16 +659,30 @@ export default function StudentDashboard({ user }) {
                         )}
 
                         {currentStage === 0 ? (
-                          <div>
-                            <label className={labelCls}>Project Title *</label>
-                            <input
-                              value={title}
-                              onChange={e => setTitle(e.target.value)}
-                              required
-                              className={inputCls}
-                              placeholder="Enter your project title"
-                            />
-                            <p className="text-gray-400 text-xs mt-1">This title will be sent to your guide for approval.</p>
+                          <div className="space-y-4">
+                            <div>
+                              <label className={labelCls}>Project Title *</label>
+                              <input
+                                value={title}
+                                onChange={e => setTitle(e.target.value)}
+                                required
+                                className={inputCls}
+                                placeholder="Enter your project title"
+                              />
+                              <p className="text-gray-400 text-xs mt-1">This title will be sent to your guide for approval.</p>
+                            </div>
+                            <div>
+                              <label className={labelCls}>Abstract *</label>
+                              <textarea
+                                value={abstract}
+                                onChange={e => setAbstract(e.target.value)}
+                                required
+                                rows={5}
+                                className={inputCls + ' resize-y'}
+                                placeholder="Enter your project abstract"
+                              />
+                              <p className="text-gray-400 text-xs mt-1">Provide a brief summary of your project (minimum 50 characters).</p>
+                            </div>
                           </div>
                         ) : (
                           <>
@@ -760,7 +782,24 @@ export default function StudentDashboard({ user }) {
                             <span className="text-gray-900 font-bold text-sm">Stage {r.reviewStage}: {REVIEW_STAGES[r.reviewStage]} Review</span>
                             <StatusBadge status={r.status} />
                           </div>
-                          
+
+                          {(r.title || r.abstract) && (
+                            <div className="bg-white rounded border border-gray-100 p-2.5 mb-2 mt-3 space-y-2">
+                              {r.title && (
+                                <p className="text-xs text-gray-700">
+                                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Title:</span>
+                                  <span className="text-[#7B1535] font-semibold ml-1">{r.title}</span>
+                                </p>
+                              )}
+                              {r.abstract && (
+                                <p className="text-xs text-gray-700">
+                                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Abstract:</span>
+                                  <span className="ml-1">{r.abstract}</span>
+                                </p>
+                              )}
+                            </div>
+                          )}
+
                           {/* Display previously submitted files */}
                           <div className="bg-white rounded border border-gray-100 p-2.5 mb-2 mt-3 space-y-1">
                             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">Submitted Files</p>
