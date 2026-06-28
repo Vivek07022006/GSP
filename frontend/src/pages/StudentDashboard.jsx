@@ -805,51 +805,6 @@ export default function StudentDashboard({ user }) {
                               )}
                             </div>
                           )}
-
-                          {/* Display previously submitted files */}
-                           <div className="bg-white rounded border border-gray-100 p-2.5 mb-2 mt-3 space-y-2">
-                            {(r.title || r.abstract) && (
-                              <div className="space-y-2 mb-2">
-                                {r.title && (
-                                  <p className="text-xs text-gray-700">
-                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Title:</span>
-                                    <span className="text-[#7B1535] font-semibold ml-1">{r.title}</span>
-                                  </p>
-                                )}
-                                {r.abstract && (
-                                  <p className="text-xs text-gray-700">
-                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Abstract:</span>
-                                    <span className="ml-1">{r.abstract}</span>
-                                  </p>
-                                )}
-                              </div>
-                            )}
-
-                            {/* Display previously submitted files */}
-                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">Submitted Files</p>
-                            {r.submissionFile && (
-                              <p className="text-xs text-gray-700 flex items-center gap-1.5">
-                                📄 Doc: <span className="text-[#7B1535] font-semibold">{r.submissionFile}</span>
-                              </p>
-                            )}
-                            {r.pptFileName && (
-                              <p className="text-xs text-gray-700 flex items-center gap-1.5">
-                                📊 PPT: <span className="text-[#7B1535] font-semibold">{r.pptFileName}</span>
-                              </p>
-                            )}
-                            {r.patentStatus && (
-                              <div className="text-xs text-gray-700 mt-1.5">
-                                Patent Status: <span className="text-gray-900 bg-gray-100 border border-gray-200 px-2 py-0.5 rounded ml-1 font-medium">{r.patentStatus}</span>
-                                {r.patentFileName && (
-                                  <p className="mt-1">Proof: <span className="text-pink-600 font-medium">{r.patentFileName}</span></p>
-                                )}
-                              </div>
-                            )}
-                            {!r.submissionFile && !r.pptFileName && !r.patentStatus && (
-                              <p className="text-xs text-gray-400 italic">No files attached.</p>
-                            )}
-                          </div>
-
                           {r.comments?.length > 0 && (
                             <div className="mt-3">
                               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5 px-0.5">Feedback History</p>
