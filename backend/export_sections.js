@@ -76,13 +76,27 @@ const buildSectionTeams = (teams) => {
 };
 
 const generateSectionExcel = async () => {
-  const mongoUri = process.env.MONGO_URI || "mongodb://localhost:27017/guide_select";
-  await mongoose.connect(mongoUri);
+  const mongoUri = process.env.MONGO_URI;
+  if (!mongoUri) { console.error('MONGO_URI not found in .env'); process.exit(1); }
+  await mongoose.connect(mongoUri, { dbName: 'test' });
+  
+  const Team = require("./models/Team");
+  const Review = require("./models/Review");
+  const User = require("./models/User");
 
   const teams = await Team.find()
     .populate("members", "name registerNumber")
     .populate("guideId", "name")
     .lean();
+
+  const allReviews = await Review.find({}).lean();
+  const teamReviewMap = {};
+  allReviews.forEach(r => {
+    const tid = r.teamId.toString();
+    if (!teamReviewMap[tid] || r.reviewStage > teamReviewMap[tid].reviewStage) {
+      teamReviewMap[tid] = r;
+    }
+  });
 
   const sectionTeams = buildSectionTeams(teams);
   const workbook = new ExcelJS.Workbook();
@@ -98,16 +112,18 @@ const generateSectionExcel = async () => {
       { header: 'Member Name', key: 'memberName', width: 28 },
       { header: 'Register Number', key: 'registerNumber', width: 18 },
       { header: 'Guide', key: 'guide', width: 28 },
+      { header: 'Abstract', key: 'abstract', width: 50 },
     ];
-    sheet.addRow(['Team ID', 'Section', 'Project Title', 'Member Name', 'Register Number', 'Guide']);
+    sheet.addRow(['Team ID', 'Section', 'Project Title', 'Member Name', 'Register Number', 'Guide', 'Abstract']);
 
     rows.forEach((teamData) => {
       const teamId = teamData.team.teamId || '';
       const guideName = teamData.team.guideId?.name || '';
       const projectTitle = teamData.team.projectTitle || '';
+      const abstract = teamReviewMap[teamData.team._id.toString()]?.abstract || '';
 
       if (teamData.members.length === 0) {
-        sheet.addRow([teamId, section.key, projectTitle, '', '', guideName]);
+        sheet.addRow([teamId, section.key, projectTitle, '', '', guideName, abstract]);
         return;
       }
 
@@ -119,6 +135,7 @@ const generateSectionExcel = async () => {
           member.name || '',
           member.registerNumber || '',
           guideName,
+          abstract,
         ]);
       });
     });
@@ -133,13 +150,15 @@ const generateSectionExcel = async () => {
       { header: 'Member Name', key: 'memberName', width: 28 },
       { header: 'Register Number', key: 'registerNumber', width: 18 },
       { header: 'Guide', key: 'guide', width: 28 },
+      { header: 'Abstract', key: 'abstract', width: 50 },
     ];
-    sheet.addRow(['Team ID', 'Section', 'Project Title', 'Member Name', 'Register Number', 'Guide']);
+    sheet.addRow(['Team ID', 'Section', 'Project Title', 'Member Name', 'Register Number', 'Guide', 'Abstract']);
 
     sectionTeams.Unknown.forEach((teamData) => {
       const teamId = teamData.team.teamId || '';
       const guideName = teamData.team.guideId?.name || '';
       const projectTitle = teamData.team.projectTitle || '';
+      const abstract = teamReviewMap[teamData.team._id.toString()]?.abstract || '';
       teamData.members.forEach((member) => {
         sheet.addRow([
           teamId,
@@ -148,6 +167,7 @@ const generateSectionExcel = async () => {
           member.name || '',
           member.registerNumber || '',
           guideName,
+          abstract,
         ]);
       });
     });

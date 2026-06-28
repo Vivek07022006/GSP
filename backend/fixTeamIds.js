@@ -25,9 +25,10 @@ const findSectionByRegister = (registerNumber) => {
 const formatTeamId = (index) => `BTECH-IT-${String(index + 1).padStart(3, '0')}`;
 
 (async () => {
-  const uri = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/guide_portal_demo';
-  await mongoose.connect(uri);
-  console.log('Connected to', uri);
+  const uri = process.env.MONGO_URI;
+  if (!uri) { console.error('MONGO_URI not found in .env'); process.exit(1); }
+  await mongoose.connect(uri, { dbName: 'test' });
+  console.log('Connected to test DB');
 
   const teams = await Team.find().populate('members', 'registerNumber').lean();
   if (teams.length === 0) {

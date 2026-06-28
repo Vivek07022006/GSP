@@ -249,6 +249,12 @@ export default function TeamReviewFaculty({ user }) {
                         📝 Title: <span className="text-[#7B1535] font-bold">{r.title}</span>
                       </p>
                     )}
+                    {r.abstract && (
+                      <p className="text-sm text-gray-700 mt-1.5">
+                        <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Abstract:</span>
+                        <span className="ml-2 text-gray-800">{r.abstract}</span>
+                      </p>
+                    )}
                     {r.submissionFile && (
                       <p className="text-sm text-gray-700 flex items-center gap-2">
                         📄 Doc: <a href="#" onClick={(e) => handleDownload(e, r.submissionFile)} className="text-[#7B1535] font-semibold underline underline-offset-2 flex items-center gap-1">{r.submissionFile} <Download size={14}/></a>

@@ -450,9 +450,15 @@ export default function StudentDashboard({ user }) {
           <GlassCard className="p-6">
             {hasTeam && team ? (
               /* ─ My Team view ─ */
-              <div>
-                <h3 className="text-gray-900 font-bold mb-5">My Team</h3>
-                <div className="space-y-5 text-sm">
+                <div>
+                  <h3 className="text-gray-900 font-bold mb-5">My Team</h3>
+                  {team.teamId && (
+                    <p className="text-xs text-gray-500 mb-4">
+                      <span className="font-bold text-gray-400 uppercase tracking-widest">Team ID:</span>
+                      <span className="ml-2 text-[#7B1535] font-bold">{team.teamId}</span>
+                    </p>
+                  )}
+                  <div className="space-y-5 text-sm">
                   <div>
                     <p className={labelCls}>Project Title</p>
                     <p className="text-gray-900 font-semibold text-base">{team.projectTitle || '—'}</p>
@@ -801,7 +807,25 @@ export default function StudentDashboard({ user }) {
                           )}
 
                           {/* Display previously submitted files */}
-                          <div className="bg-white rounded border border-gray-100 p-2.5 mb-2 mt-3 space-y-1">
+                           <div className="bg-white rounded border border-gray-100 p-2.5 mb-2 mt-3 space-y-2">
+                            {(r.title || r.abstract) && (
+                              <div className="space-y-2 mb-2">
+                                {r.title && (
+                                  <p className="text-xs text-gray-700">
+                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Title:</span>
+                                    <span className="text-[#7B1535] font-semibold ml-1">{r.title}</span>
+                                  </p>
+                                )}
+                                {r.abstract && (
+                                  <p className="text-xs text-gray-700">
+                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Abstract:</span>
+                                    <span className="ml-1">{r.abstract}</span>
+                                  </p>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Display previously submitted files */}
                             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">Submitted Files</p>
                             {r.submissionFile && (
                               <p className="text-xs text-gray-700 flex items-center gap-1.5">

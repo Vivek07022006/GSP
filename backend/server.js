@@ -692,7 +692,13 @@ app.get("/api/admin/export", protect, adminOnly, async (req, res) => {
       { number: 1, label: REVIEW_STAGE_LABELS[4], stage: 4 },
     ];
 
-    const header = ['Team ID', 'Project Title', 'Member Name', 'Register Number', 'Guide', 'Current Review'];
+    const header = ['Team ID', 'Project Title', 'Member Name', 'Register Number', 'Guide', 'Current Review', 'Abstract'];
+
+    const reviewMap = new Map();
+    const teamReviews = await Review.find({}).lean();
+    teamReviews.forEach(r => {
+      reviewMap.set(`${r.teamId}_${r.reviewStage}`, r);
+    });
 
     workbooks.forEach(({ number, label, stage }) => {
       const sheet = workbook.addWorksheet(`${number} - ${label}`);
@@ -703,17 +709,19 @@ app.get("/api/admin/export", protect, adminOnly, async (req, res) => {
         { header: 'Register Number', key: 'registerNumber', width: 18 },
         { header: 'Guide', key: 'guide', width: 28 },
         { header: 'Current Review', key: 'currentReview', width: 20 },
+        { header: 'Abstract', key: 'abstract', width: 50 },
       ];
       sheet.addRow(header);
       reviewGroups[stage].forEach((team) => {
         const guide = team.guideId?.name || '';
         const reviewLabel = REVIEW_STAGE_LABELS[team.currentReview ?? 0] || '';
+        const abstract = reviewMap.get(`${team._id}_${stage}`)?.abstract || '';
         const members = team.members || [];
         if (members.length === 0) {
-          sheet.addRow([team.teamId || '', team.projectTitle || '', '', '', guide, reviewLabel]);
+          sheet.addRow([team.teamId || '', team.projectTitle || '', '', '', guide, reviewLabel, abstract]);
         } else {
           members.forEach((member) => {
-            sheet.addRow([team.teamId || '', team.projectTitle || '', member.name || '', member.registerNumber || '', guide, reviewLabel]);
+            sheet.addRow([team.teamId || '', team.projectTitle || '', member.name || '', member.registerNumber || '', guide, reviewLabel, abstract]);
           });
         }
       });
@@ -728,13 +736,15 @@ app.get("/api/admin/export", protect, adminOnly, async (req, res) => {
       { header: 'Register Number', key: 'registerNumber', width: 18 },
       { header: 'Guide', key: 'guide', width: 28 },
       { header: 'Current Review', key: 'currentReview', width: 20 },
+      { header: 'Abstract', key: 'abstract', width: 50 },
     ];
-    singleSheet.addRow(header);
+    singleSheet.addRow([...header]);
     singleStudentTeams.forEach((team) => {
       const guide = team.guideId?.name || '';
       const reviewLabel = REVIEW_STAGE_LABELS[team.currentReview ?? 0] || '';
       const member = team.members?.[0] || {};
-      singleSheet.addRow([team.teamId || '', team.projectTitle || '', member.name || '', member.registerNumber || '', guide, reviewLabel]);
+      const abstract = reviewMap.get(`${team._id}_${team.currentReview}`)?.abstract || '';
+      singleSheet.addRow([team.teamId || '', team.projectTitle || '', member.name || '', member.registerNumber || '', guide, reviewLabel, abstract]);
     });
 
     const reviewExportPath = path.join(exportsDir, 'review_export.xlsx');
@@ -763,6 +773,18 @@ app.get("/api/admin/export/sections", protect, adminOnly, async (req, res) => {
 
     const workbook = new ExcelJS.Workbook();
     const sectionKeys = SECTION_RANGES.map((section) => section.key);
+    const reviewMap = new Map();
+    const allReviews = await Review.find({}).lean();
+    allReviews.forEach(r => {
+      reviewMap.set(`${r.teamId}_${r.reviewStage}`, r);
+    });
+    const teamReviewMap = {};
+    allReviews.forEach(r => {
+      const tid = r.teamId.toString();
+      if (!teamReviewMap[tid] || r.reviewStage > teamReviewMap[tid].reviewStage) {
+        teamReviewMap[tid] = r;
+      }
+    });
 
     let globalTeamIndex = 0;
     sectionKeys.forEach((sectionKey) => {
@@ -775,17 +797,19 @@ app.get("/api/admin/export/sections", protect, adminOnly, async (req, res) => {
         { header: 'Member Name', key: 'memberName', width: 28 },
         { header: 'Register Number', key: 'registerNumber', width: 18 },
         { header: 'Guide', key: 'guide', width: 28 },
+        { header: 'Abstract', key: 'abstract', width: 50 },
       ];
-      sheet.addRow(['Team ID', 'Section', 'Project Title', 'Member Name', 'Register Number', 'Guide']);
+      sheet.addRow(['Team ID', 'Section', 'Project Title', 'Member Name', 'Register Number', 'Guide', 'Abstract']);
 
       rows.forEach((teamData) => {
         const teamId = teamData.team.teamId || formatTeamId(globalTeamIndex);
         globalTeamIndex += 1;
         const guideName = teamData.team.guideId?.name || '';
         const projectTitle = teamData.team.projectTitle || '';
+        const abstract = teamReviewMap[teamData.team._id.toString()]?.abstract || '';
 
         if (teamData.members.length === 0) {
-          sheet.addRow([teamId, sectionKey, projectTitle, '', '', guideName]);
+          sheet.addRow([teamId, sectionKey, projectTitle, '', '', guideName, abstract]);
           return;
         }
 
@@ -797,6 +821,7 @@ app.get("/api/admin/export/sections", protect, adminOnly, async (req, res) => {
             member.name || '',
             member.registerNumber || '',
             guideName,
+            abstract,
           ]);
         });
       });
@@ -811,13 +836,15 @@ app.get("/api/admin/export/sections", protect, adminOnly, async (req, res) => {
         { header: 'Member Name', key: 'memberName', width: 28 },
         { header: 'Register Number', key: 'registerNumber', width: 18 },
         { header: 'Guide', key: 'guide', width: 28 },
+        { header: 'Abstract', key: 'abstract', width: 50 },
       ];
-      unknownSheet.addRow(['Team ID', 'Section', 'Project Title', 'Member Name', 'Register Number', 'Guide']);
+      unknownSheet.addRow(['Team ID', 'Section', 'Project Title', 'Member Name', 'Register Number', 'Guide', 'Abstract']);
       sectionTeams.Unknown.forEach((teamData) => {
         const teamId = teamData.team.teamId || formatTeamId(globalTeamIndex);
         globalTeamIndex += 1;
         const guideName = teamData.team.guideId?.name || '';
         const projectTitle = teamData.team.projectTitle || '';
+        const abstract = teamReviewMap[teamData.team._id.toString()]?.abstract || '';
         teamData.members.forEach((member) => {
           unknownSheet.addRow([
             teamId,
@@ -826,6 +853,7 @@ app.get("/api/admin/export/sections", protect, adminOnly, async (req, res) => {
             member.name || '',
             member.registerNumber || '',
             guideName,
+            abstract,
           ]);
         });
       });

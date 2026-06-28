@@ -4,11 +4,12 @@ const User = require('./models/User');
 const Team = require('./models/Team');
 
 
-const mongoUri = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/guide_portal_demo';
+const mongoUri = process.env.MONGO_URI;
+if (!mongoUri) { console.error('MONGO_URI not found in .env'); process.exit(1); }
 
 async function connectDb() {
-  await mongoose.connect(mongoUri);
-  console.log('✅ Connected to MongoDB');
+  await mongoose.connect(mongoUri, { dbName: 'test' });
+  console.log('Connected to test DB');
 }
 
 const SECTION_RANGES = [
