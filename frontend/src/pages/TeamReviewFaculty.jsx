@@ -32,8 +32,7 @@ export default function TeamReviewFaculty({ user }) {
   const [evaluation, setEvaluation] = useState({
     projectType: '',
     assuredOutcome: '',
-    internalMarks: '',
-    externalMarks: '',
+    studentMarks: [],
   });
   const [comment, setComment] = useState('');
   const [reviewStatus, setReviewStatus] = useState('approved');
@@ -46,11 +45,22 @@ export default function TeamReviewFaculty({ user }) {
       const found = res.data.find(t => t._id === teamId);
       if (found) {
         setTeam(found);
+        const initialMarks = (found.studentMarks || []).length > 0
+          ? found.studentMarks.map((m) => ({
+              studentId: m.studentId?.toString ? m.studentId.toString() : m.studentId,
+              caeMarks: m.caeMarks != null ? String(m.caeMarks) : '',
+              eseMarks: m.eseMarks != null ? String(m.eseMarks) : '',
+            }))
+          : (found.members || []).map((member) => ({
+              studentId: member._id.toString(),
+              caeMarks: '',
+              eseMarks: '',
+            }));
+
         setEvaluation({
           projectType: found.projectType || '',
           assuredOutcome: found.assuredOutcome || '',
-          internalMarks: found.internalMarks != null ? String(found.internalMarks) : '',
-          externalMarks: found.externalMarks != null ? String(found.externalMarks) : '',
+          studentMarks: initialMarks,
         });
         const revs = await api.get(`/api/reviews/${found._id}`);
         setReviews(revs.data);
@@ -74,8 +84,11 @@ export default function TeamReviewFaculty({ user }) {
       await api.post(`/api/guides/team/${team._id}/evaluation`, {
         projectType: evaluation.projectType,
         assuredOutcome: evaluation.assuredOutcome,
-        internalMarks: Number(evaluation.internalMarks),
-        externalMarks: Number(evaluation.externalMarks),
+        studentMarks: evaluation.studentMarks.map((mark) => ({
+          studentId: mark.studentId,
+          caeMarks: Number(mark.caeMarks),
+          eseMarks: Number(mark.eseMarks),
+        })),
       });
       setMsg({ type: 'success', text: 'Team evaluation submitted successfully.' });
       fetchTeamData();
@@ -120,7 +133,12 @@ export default function TeamReviewFaculty({ user }) {
   );
 
   const isGuide = user?.role === 'faculty' && team.guideId?._id === user._id;
-  const hasEvaluation = team.projectType && team.assuredOutcome && team.internalMarks != null && team.externalMarks != null;
+  const hasEvaluation = Boolean(
+    team.projectType && team.assuredOutcome &&
+    Array.isArray(team.studentMarks) &&
+    team.studentMarks.length === (team.members?.length || 0) &&
+    team.studentMarks.every((m) => m.caeMarks != null && m.eseMarks != null)
+  );
   const displayStatus = team.status;
 
   return (
@@ -178,9 +196,17 @@ export default function TeamReviewFaculty({ user }) {
                       <div><span className="font-bold">Project Type:</span> {team.projectType}</div>
                       <div><span className="font-bold">Assured Outcome:</span> {team.assuredOutcome}</div>
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div><span className="font-bold">Internal Marks:</span> {team.internalMarks != null ? team.internalMarks : '—'}</div>
-                      <div><span className="font-bold">External Marks:</span> {team.externalMarks != null ? team.externalMarks : '—'}</div>
+                    <div className="space-y-3">
+                      {(team.studentMarks || []).map((mark) => {
+                        const student = team.members?.find((m) => m._id?.toString() === mark.studentId?.toString()) || {};
+                        return (
+                          <div key={mark.studentId} className="grid grid-cols-1 gap-2 md:grid-cols-3 items-center border border-gray-100 rounded-xl p-3 bg-gray-50">
+                            <div className="text-sm font-semibold text-gray-900">{student.name || 'Student'}</div>
+                            <div className="text-sm text-gray-600">CAE Marks: <span className="font-bold text-gray-900">{mark.caeMarks != null ? mark.caeMarks : '—'}</span></div>
+                            <div className="text-sm text-gray-600">ESE Marks: <span className="font-bold text-gray-900">{mark.eseMarks != null ? mark.eseMarks : '—'}</span></div>
+                          </div>
+                        );
+                      })}
                     </div>
                     <p className="text-xs text-gray-500">These values were submitted by the assigned guide and cannot be edited again.</p>
                   </div>
@@ -214,42 +240,61 @@ export default function TeamReviewFaculty({ user }) {
                       </label>
                     </div>
 
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <label className="block text-gray-600 text-xs font-bold uppercase tracking-widest">
-                        Internal Marks
-                        <select
-                          value={evaluation.internalMarks}
-                          onChange={(e) => setEvaluation({ ...evaluation, internalMarks: e.target.value })}
-                          className="mt-2 w-full text-sm px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 focus:outline-none focus:ring-1 focus:ring-[#7B1535]"
-                        >
-                          <option value="">Select marks</option>
-                          {Array.from({ length: 11 }, (_, i) => (
-                            <option key={i} value={i}>{i}</option>
-                          ))}
-                        </select>
-                      </label>
-                      <label className="block text-gray-600 text-xs font-bold uppercase tracking-widest">
-                        External Marks
-                        <select
-                          value={evaluation.externalMarks}
-                          onChange={(e) => setEvaluation({ ...evaluation, externalMarks: e.target.value })}
-                          className="mt-2 w-full text-sm px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 focus:outline-none focus:ring-1 focus:ring-[#7B1535]"
-                        >
-                          <option value="">Select marks</option>
-                          {Array.from({ length: 11 }, (_, i) => (
-                            <option key={i} value={i}>{i}</option>
-                          ))}
-                        </select>
-                      </label>
-                    </div>
+                    <div className="space-y-4">
+                      {(evaluation.studentMarks || []).map((mark, idx) => {
+                        const student = team.members?.find((m) => m._id?.toString() === mark.studentId?.toString()) || {};
+                        return (
+                          <div key={mark.studentId} className="grid gap-4 sm:grid-cols-3 items-end border border-gray-100 rounded-xl p-4 bg-gray-50">
+                            <div>
+                              <div className="text-sm font-semibold text-gray-900">{student.name || 'Student'}</div>
+                              <div className="text-xs text-gray-500">{student.registerNumber || ''}</div>
+                            </div>
+                            <label className="block text-gray-600 text-xs font-bold uppercase tracking-widest">
+                              CAE Marks
+                              <select
+                                value={mark.caeMarks}
+                                onChange={(e) => {
+                                  const next = [...evaluation.studentMarks];
+                                  next[idx] = { ...next[idx], caeMarks: e.target.value };
+                                  setEvaluation({ ...evaluation, studentMarks: next });
+                                }}
+                                className="mt-2 w-full text-sm px-3 py-2 bg-white border border-gray-200 rounded-lg text-gray-900 focus:outline-none focus:ring-1 focus:ring-[#7B1535]"
+                              >
+                                <option value="">Select CAE</option>
+                                {Array.from({ length: 11 }, (_, i) => (
+                                  <option key={i} value={i}>{i}</option>
+                                ))}
+                              </select>
+                            </label>
+                            <label className="block text-gray-600 text-xs font-bold uppercase tracking-widest">
+                              ESE Marks
+                              <select
+                                value={mark.eseMarks}
+                                onChange={(e) => {
+                                  const next = [...evaluation.studentMarks];
+                                  next[idx] = { ...next[idx], eseMarks: e.target.value };
+                                  setEvaluation({ ...evaluation, studentMarks: next });
+                                }}
+                                className="mt-2 w-full text-sm px-3 py-2 bg-white border border-gray-200 rounded-lg text-gray-900 focus:outline-none focus:ring-1 focus:ring-[#7B1535]"
+                              >
+                                <option value="">Select ESE</option>
+                                {Array.from({ length: 11 }, (_, i) => (
+                                  <option key={i} value={i}>{i}</option>
+                                ))}
+                              </select>
+                            </label>
+                          </div>
+                        );
+                      })}
 
-                    <button
-                      onClick={submitEvaluation}
-                      disabled={loading || !evaluation.projectType || !evaluation.assuredOutcome || evaluation.internalMarks === '' || evaluation.externalMarks === ''}
-                      className="w-full bg-[#7B1535] hover:bg-[#961a42] disabled:opacity-40 text-white text-sm py-3 rounded-lg font-bold transition-colors shadow-sm"
-                    >
-                      Submit Guide Evaluation
-                    </button>
+                      <button
+                        onClick={submitEvaluation}
+                        disabled={loading || !evaluation.projectType || !evaluation.assuredOutcome || evaluation.studentMarks.some((mark) => mark.caeMarks === '' || mark.eseMarks === '')}
+                        className="w-full bg-[#7B1535] hover:bg-[#961a42] disabled:opacity-40 text-white text-sm py-3 rounded-lg font-bold transition-colors shadow-sm"
+                      >
+                        Submit Guide Evaluation
+                      </button>
+                    </div>
                   </div>
                 )}
               </GlassCard>
