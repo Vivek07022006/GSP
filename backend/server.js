@@ -78,6 +78,10 @@ const CommentSchema = new mongoose.Schema({
 const TeamSchema = new mongoose.Schema({
   teamId:        { type: String, unique: true, sparse: true },
   projectTitle:  { type: String, default: "" },
+  projectType:   { type: String, enum: ["Inhouse", "External"], default: "" },
+  assuredOutcome:{ type: String, enum: ["Journal", "Patent", "Product Startup"], default: "" },
+  internalMarks: { type: Number, min: 0, max: 10, default: null },
+  externalMarks: { type: Number, min: 0, max: 10, default: null },
   members:       [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
   guideId:       { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
   status:        { type: String, enum: ["pending", "guide_approved", "guide_rejected"], default: "pending" },
@@ -522,6 +526,44 @@ app.post("/api/guides/team/:teamId/status", protect, async (req, res) => {
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
+app.post("/api/guides/team/:teamId/evaluation", protect, async (req, res) => {
+  try {
+    if (req.user.role !== "faculty") return res.status(403).json({ message: "Faculty only" });
+
+    const { projectType, assuredOutcome, internalMarks, externalMarks } = req.body;
+    const team = await Team.findById(req.params.teamId);
+    if (!team) return res.status(404).json({ message: "Team not found" });
+    if (team.guideId?.toString() !== req.user._id.toString())
+      return res.status(403).json({ message: "Not your team" });
+
+    const hasEvaluation = team.projectType || team.assuredOutcome || team.internalMarks !== null || team.externalMarks !== null;
+    if (hasEvaluation) {
+      return res.status(400).json({ message: "Evaluation has already been submitted." });
+    }
+
+    const validTypes = ["Inhouse", "External"];
+    const validOutcomes = ["Journal", "Patent", "Product Startup"];
+    if (!validTypes.includes(projectType)) return res.status(400).json({ message: "Invalid project type." });
+    if (!validOutcomes.includes(assuredOutcome)) return res.status(400).json({ message: "Invalid assured outcome." });
+
+    const internalValue = Number(internalMarks);
+    const externalValue = Number(externalMarks);
+    if (!Number.isInteger(internalValue) || internalValue < 0 || internalValue > 10)
+      return res.status(400).json({ message: "Internal marks must be an integer between 0 and 10." });
+    if (!Number.isInteger(externalValue) || externalValue < 0 || externalValue > 10)
+      return res.status(400).json({ message: "External marks must be an integer between 0 and 10." });
+
+    team.projectType = projectType;
+    team.assuredOutcome = assuredOutcome;
+    team.internalMarks = internalValue;
+    team.externalMarks = externalValue;
+    await team.save();
+
+    const populated = await Team.findById(team._id).populate("members", "-password").populate("guideId", "-password");
+    res.json(populated);
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
 // ─────────────────────────────────────────────
 // REVIEW ROUTES
 // ─────────────────────────────────────────────
@@ -794,22 +836,30 @@ app.get("/api/admin/export/sections", protect, adminOnly, async (req, res) => {
         { header: 'Team ID', key: 'teamId', width: 18 },
         { header: 'Section', key: 'section', width: 10 },
         { header: 'Project Title', key: 'projectTitle', width: 40 },
+        { header: 'Project Type', key: 'projectType', width: 16 },
+        { header: 'Assured Outcome', key: 'assuredOutcome', width: 20 },
+        { header: 'Internal Marks', key: 'internalMarks', width: 14 },
+        { header: 'External Marks', key: 'externalMarks', width: 14 },
         { header: 'Member Name', key: 'memberName', width: 28 },
         { header: 'Register Number', key: 'registerNumber', width: 18 },
         { header: 'Guide', key: 'guide', width: 28 },
         { header: 'Abstract', key: 'abstract', width: 50 },
       ];
-      sheet.addRow(['Team ID', 'Section', 'Project Title', 'Member Name', 'Register Number', 'Guide', 'Abstract']);
+      sheet.addRow(['Team ID', 'Section', 'Project Title', 'Project Type', 'Assured Outcome', 'Internal Marks', 'External Marks', 'Member Name', 'Register Number', 'Guide', 'Abstract']);
 
       rows.forEach((teamData) => {
         const teamId = teamData.team.teamId || formatTeamId(globalTeamIndex);
         globalTeamIndex += 1;
         const guideName = teamData.team.guideId?.name || '';
         const projectTitle = teamData.team.projectTitle || '';
+        const projectType = teamData.team.projectType || '';
+        const assuredOutcome = teamData.team.assuredOutcome || '';
+        const internalMarks = teamData.team.internalMarks != null ? teamData.team.internalMarks : '';
+        const externalMarks = teamData.team.externalMarks != null ? teamData.team.externalMarks : '';
         const abstract = teamReviewMap[teamData.team._id.toString()]?.abstract || '';
 
         if (teamData.members.length === 0) {
-          sheet.addRow([teamId, sectionKey, projectTitle, '', '', guideName, abstract]);
+          sheet.addRow([teamId, sectionKey, projectTitle, projectType, assuredOutcome, internalMarks, externalMarks, '', '', guideName, abstract]);
           return;
         }
 
@@ -818,6 +868,10 @@ app.get("/api/admin/export/sections", protect, adminOnly, async (req, res) => {
             teamId,
             sectionKey,
             projectTitle,
+            projectType,
+            assuredOutcome,
+            internalMarks,
+            externalMarks,
             member.name || '',
             member.registerNumber || '',
             guideName,
@@ -833,23 +887,35 @@ app.get("/api/admin/export/sections", protect, adminOnly, async (req, res) => {
         { header: 'Team ID', key: 'teamId', width: 18 },
         { header: 'Section', key: 'section', width: 10 },
         { header: 'Project Title', key: 'projectTitle', width: 40 },
+        { header: 'Project Type', key: 'projectType', width: 16 },
+        { header: 'Assured Outcome', key: 'assuredOutcome', width: 20 },
+        { header: 'Internal Marks', key: 'internalMarks', width: 14 },
+        { header: 'External Marks', key: 'externalMarks', width: 14 },
         { header: 'Member Name', key: 'memberName', width: 28 },
         { header: 'Register Number', key: 'registerNumber', width: 18 },
         { header: 'Guide', key: 'guide', width: 28 },
         { header: 'Abstract', key: 'abstract', width: 50 },
       ];
-      unknownSheet.addRow(['Team ID', 'Section', 'Project Title', 'Member Name', 'Register Number', 'Guide', 'Abstract']);
+      unknownSheet.addRow(['Team ID', 'Section', 'Project Title', 'Project Type', 'Assured Outcome', 'Internal Marks', 'External Marks', 'Member Name', 'Register Number', 'Guide', 'Abstract']);
       sectionTeams.Unknown.forEach((teamData) => {
         const teamId = teamData.team.teamId || formatTeamId(globalTeamIndex);
         globalTeamIndex += 1;
         const guideName = teamData.team.guideId?.name || '';
         const projectTitle = teamData.team.projectTitle || '';
+        const projectType = teamData.team.projectType || '';
+        const assuredOutcome = teamData.team.assuredOutcome || '';
+        const internalMarks = teamData.team.internalMarks != null ? teamData.team.internalMarks : '';
+        const externalMarks = teamData.team.externalMarks != null ? teamData.team.externalMarks : '';
         const abstract = teamReviewMap[teamData.team._id.toString()]?.abstract || '';
         teamData.members.forEach((member) => {
           unknownSheet.addRow([
             teamId,
             'Unknown',
             projectTitle,
+            projectType,
+            assuredOutcome,
+            internalMarks,
+            externalMarks,
             member.name || '',
             member.registerNumber || '',
             guideName,

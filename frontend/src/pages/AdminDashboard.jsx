@@ -52,7 +52,27 @@ export default function AdminDashboard({ user }) {
     finally { setLoading(false); }
   };
 
-  const exportReport = async () => {
+  const exportTeamDetailsWithMarks = async () => {
+    try {
+      const response = await api.get('/api/admin/export/sections', {
+        responseType: 'blob',
+        params: { _ts: Date.now() },
+      });
+      const blob = new Blob([response.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'team_details_with_marks.xlsx';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      alert('Export failed.');
+    }
+  };
+
+  const exportReviewStatus = async () => {
     try {
       const response = await api.get('/api/admin/export', {
         responseType: 'blob',
@@ -62,7 +82,7 @@ export default function AdminDashboard({ user }) {
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = 'review_export.xlsx';
+      link.download = 'team_review_status.xlsx';
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -109,10 +129,16 @@ export default function AdminDashboard({ user }) {
             <h1 className="text-2xl font-black text-gray-900">Admin Dashboard</h1>
             <p className="text-gray-500 text-sm mt-1">HOD — Full system access</p>
           </div>
-          <button onClick={exportReport}
-            className="flex items-center gap-2 bg-[#7B1535] hover:bg-[#961a42] text-white font-bold px-4 py-2.5 rounded-xl text-sm transition-all shadow-sm">
-            <Download size={15} /> Export Excel
-          </button>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <button onClick={exportTeamDetailsWithMarks}
+              className="flex items-center gap-2 bg-[#7B1535] hover:bg-[#961a42] text-white font-bold px-4 py-2.5 rounded-xl text-sm transition-all shadow-sm">
+              <Download size={15} /> Team Details Along with Marks
+            </button>
+            <button onClick={exportReviewStatus}
+              className="flex items-center gap-2 bg-gray-900 hover:bg-gray-800 text-white font-bold px-4 py-2.5 rounded-xl text-sm transition-all shadow-sm">
+              <Download size={15} /> Review Status Export
+            </button>
+          </div>
         </div>
       </div>
 

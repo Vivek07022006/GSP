@@ -29,6 +29,12 @@ export default function TeamReviewFaculty({ user }) {
   const navigate = useNavigate();
   const [team, setTeam] = useState(null);
   const [reviews, setReviews] = useState([]);
+  const [evaluation, setEvaluation] = useState({
+    projectType: '',
+    assuredOutcome: '',
+    internalMarks: '',
+    externalMarks: '',
+  });
   const [comment, setComment] = useState('');
   const [reviewStatus, setReviewStatus] = useState('approved');
   const [msg, setMsg] = useState({ type: '', text: '' });
@@ -40,6 +46,12 @@ export default function TeamReviewFaculty({ user }) {
       const found = res.data.find(t => t._id === teamId);
       if (found) {
         setTeam(found);
+        setEvaluation({
+          projectType: found.projectType || '',
+          assuredOutcome: found.assuredOutcome || '',
+          internalMarks: found.internalMarks != null ? String(found.internalMarks) : '',
+          externalMarks: found.externalMarks != null ? String(found.externalMarks) : '',
+        });
         const revs = await api.get(`/api/reviews/${found._id}`);
         setReviews(revs.data);
       }
@@ -54,6 +66,23 @@ export default function TeamReviewFaculty({ user }) {
     fetchTeamData();
   }, [teamId]);
 
+
+  const submitEvaluation = async () => {
+    setMsg({ type: '', text: '' });
+    setLoading(true);
+    try {
+      await api.post(`/api/guides/team/${team._id}/evaluation`, {
+        projectType: evaluation.projectType,
+        assuredOutcome: evaluation.assuredOutcome,
+        internalMarks: Number(evaluation.internalMarks),
+        externalMarks: Number(evaluation.externalMarks),
+      });
+      setMsg({ type: 'success', text: 'Team evaluation submitted successfully.' });
+      fetchTeamData();
+    } catch (err) {
+      setMsg({ type: 'error', text: err.response?.data?.message || 'Failed to submit evaluation.' });
+    } finally { setLoading(false); }
+  };
 
   const submitFeedback = async () => {
     setMsg({ type: '', text: '' });
@@ -90,6 +119,8 @@ export default function TeamReviewFaculty({ user }) {
     </div>
   );
 
+  const isGuide = user?.role === 'faculty' && team.guideId?._id === user._id;
+  const hasEvaluation = team.projectType && team.assuredOutcome && team.internalMarks != null && team.externalMarks != null;
   const displayStatus = team.status;
 
   return (
@@ -136,6 +167,93 @@ export default function TeamReviewFaculty({ user }) {
             </div>
           </GlassCard>
           <div className="space-y-4">
+
+            {isGuide && (
+              <GlassCard className="p-6">
+                <h3 className="text-gray-900 font-bold mb-4 border-b border-gray-100 pb-2">Guide Evaluation</h3>
+
+                {hasEvaluation ? (
+                  <div className="space-y-3 text-sm text-gray-700">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div><span className="font-bold">Project Type:</span> {team.projectType}</div>
+                      <div><span className="font-bold">Assured Outcome:</span> {team.assuredOutcome}</div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div><span className="font-bold">Internal Marks:</span> {team.internalMarks != null ? team.internalMarks : '—'}</div>
+                      <div><span className="font-bold">External Marks:</span> {team.externalMarks != null ? team.externalMarks : '—'}</div>
+                    </div>
+                    <p className="text-xs text-gray-500">These values were submitted by the assigned guide and cannot be edited again.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <label className="block text-gray-600 text-xs font-bold uppercase tracking-widest">
+                        Project Type
+                        <select
+                          value={evaluation.projectType}
+                          onChange={(e) => setEvaluation({ ...evaluation, projectType: e.target.value })}
+                          className="mt-2 w-full text-sm px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 focus:outline-none focus:ring-1 focus:ring-[#7B1535]"
+                        >
+                          <option value="">Select type</option>
+                          <option value="Inhouse">Inhouse</option>
+                          <option value="External">External</option>
+                        </select>
+                      </label>
+                      <label className="block text-gray-600 text-xs font-bold uppercase tracking-widest">
+                        Assured Outcome
+                        <select
+                          value={evaluation.assuredOutcome}
+                          onChange={(e) => setEvaluation({ ...evaluation, assuredOutcome: e.target.value })}
+                          className="mt-2 w-full text-sm px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 focus:outline-none focus:ring-1 focus:ring-[#7B1535]"
+                        >
+                          <option value="">Select outcome</option>
+                          <option value="Journal">Journal</option>
+                          <option value="Patent">Patent</option>
+                          <option value="Product Startup">Product Startup</option>
+                        </select>
+                      </label>
+                    </div>
+
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <label className="block text-gray-600 text-xs font-bold uppercase tracking-widest">
+                        Internal Marks
+                        <select
+                          value={evaluation.internalMarks}
+                          onChange={(e) => setEvaluation({ ...evaluation, internalMarks: e.target.value })}
+                          className="mt-2 w-full text-sm px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 focus:outline-none focus:ring-1 focus:ring-[#7B1535]"
+                        >
+                          <option value="">Select marks</option>
+                          {Array.from({ length: 11 }, (_, i) => (
+                            <option key={i} value={i}>{i}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="block text-gray-600 text-xs font-bold uppercase tracking-widest">
+                        External Marks
+                        <select
+                          value={evaluation.externalMarks}
+                          onChange={(e) => setEvaluation({ ...evaluation, externalMarks: e.target.value })}
+                          className="mt-2 w-full text-sm px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 focus:outline-none focus:ring-1 focus:ring-[#7B1535]"
+                        >
+                          <option value="">Select marks</option>
+                          {Array.from({ length: 11 }, (_, i) => (
+                            <option key={i} value={i}>{i}</option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+
+                    <button
+                      onClick={submitEvaluation}
+                      disabled={loading || !evaluation.projectType || !evaluation.assuredOutcome || evaluation.internalMarks === '' || evaluation.externalMarks === ''}
+                      className="w-full bg-[#7B1535] hover:bg-[#961a42] disabled:opacity-40 text-white text-sm py-3 rounded-lg font-bold transition-colors shadow-sm"
+                    >
+                      Submit Guide Evaluation
+                    </button>
+                  </div>
+                )}
+              </GlassCard>
+            )}
 
             {(team.currentReview === 0 || (team.status === 'guide_approved' && team.currentReview >= 1 && team.currentReview <= 4)) && (() => {
               // Find if student has submitted for the current stage
