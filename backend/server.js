@@ -190,6 +190,7 @@ const buildSectionTeams = (teams) => {
   teams.forEach((team) => {
     const members = (team.members || [])
       .map((member) => ({
+        _id: member?._id,
         name: member?.name || '',
         registerNumber: member?.registerNumber || '',
         numericRegister: parseInt((member?.registerNumber || '').replace(/[^0-9]/g, ''), 10) || Number.MAX_SAFE_INTEGER,
